@@ -86,7 +86,7 @@
     <span id="ora">--:--</span>
   </form>
   <div id="chip" role="toolbar" aria-label="Categorie"></div>
-  <div id="osm">© OPENSTREETMAP</div>
+  <div id="osm">© OPENSTREETMAP · OVERTURE MAPS</div>
   <div id="campo" aria-label="Luoghi davanti a lei"></div>
   <div id="bordo-sx" class="bordo" hidden></div>
   <div id="bordo-dx" class="bordo" hidden></div>
@@ -98,7 +98,7 @@
 </div>
 <script>
 "use strict";
-// Visore: bussola HUD con i luoghi intorno (OpenStreetMap). Niente dati del negozio, niente chiavi: solo posizione e direzione.
+// Visore: bussola HUD con i luoghi intorno (Overture Maps + OpenStreetMap nei paesi preparati, OpenStreetMap per i paesi nuovi). Niente dati del negozio, niente chiavi: solo posizione e direzione.
 // Gesti della Neural Band: ◀▶ marcatore precedente/successivo · ▲ barra di ricerca e categorie · pizzico: imposta/annulla obiettivo.
 const URL_DATI = "https://wbcszvjszruatmpigncd.supabase.co/functions/v1/jarvis-lente";   // solo per la voce del saluto
 // Server pubblici di OpenStreetMap: a volte lenti, si prova il successivo.
