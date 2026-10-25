@@ -1,0 +1,29 @@
+[
+ {
+  "nome": "galatina",
+  "centro": [
+   40.1745,
+   18.1695
+  ],
+  "raggio": 6000,
+  "file": "galatina.json"
+ },
+ {
+  "nome": "galatone",
+  "centro": [
+   40.146,
+   18.072
+  ],
+  "raggio": 4000,
+  "file": "galatone.json"
+ },
+ {
+  "nome": "nardo",
+  "centro": [
+   40.1797,
+   18.0336
+  ],
+  "raggio": 3000,
+  "file": "nardo.json"
+ }
+]
