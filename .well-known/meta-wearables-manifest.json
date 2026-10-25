@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "name": "Jarvis",
+  "description": "Cruscotto di Jarvis per La Baronessa: priorità, task e cassa.",
+  "appearance": {
+    "theme_color": "#3FD4FF",
+    "icon": {
+      "src": "../icona.svg"
+    }
+  }
+}
