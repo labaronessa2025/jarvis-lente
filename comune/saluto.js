@@ -32,8 +32,8 @@
     riga.textContent = sotto;
     box.appendChild(riga);
     (document.getElementById("app") || document.body).appendChild(box);
-    requestAnimationFrame(() => box.classList.add("visibile"));
-    setTimeout(() => box.classList.remove("visibile"), 3500);
+    // Il timer parte quando il riquadro compare davvero: se il primo disegno tarda, il saluto non resta fisso sullo schermo.
+    requestAnimationFrame(() => { box.classList.add("visibile"); setTimeout(() => box.classList.remove("visibile"), 3500); });
 
     if (!chiave || Date.now() - (+leggi("saluto-ora-" + app) || 0) < 15 * 60 * 1000) return;
     try {
