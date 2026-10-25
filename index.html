@@ -311,7 +311,7 @@ async function saluta() {
   try { ultimo = +localStorage.getItem("lente-saluto") || 0; } catch (e) {}
   if (!K || Date.now() - ultimo < 15 * 60 * 1000) return;
   try {
-    const r = await fetch(URL_DATI + "?audio=saluto-" + nome, { headers: { "x-lente-key": K }, cache: "no-store" });
+    const r = await fetch(URL_DATI + "?audio=saluto-" + nome + (Math.random() < .5 ? "-2" : ""), { headers: { "x-lente-key": K }, cache: "no-store" });
     if (!r.ok) return;
     const voce = new Audio(URL.createObjectURL(await r.blob()));
     const parla = () => voce.play().then(() => { try { localStorage.setItem("lente-saluto", String(Date.now())); } catch (e) {} });
