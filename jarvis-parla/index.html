@@ -14,7 +14,7 @@
     --sans:"SF Pro Display", -apple-system, "Roboto", "Helvetica Neue", Arial, sans-serif;
   }
   * { box-sizing:border-box; margin:0; padding:0; }
-  html, body { width:100%; height:100%; overflow:hidden; background:#000; color:var(--testo); font:20px/1.3 var(--sans); touch-action:none; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; color:var(--testo); font:20px/1.3 var(--sans); }
   #app { position:relative; display:flex; flex-direction:column; height:100%; padding:18px 22px 14px; }
   #app::before, #app::after { content:""; position:absolute; width:34px; height:34px; border:2px solid var(--ciano); opacity:.7; }
   #app::before { top:6px; left:6px; border-right:0; border-bottom:0; }
@@ -31,11 +31,7 @@
   #ora { font:600 24px/1 var(--mono); }
   #domanda { width:100%; font:600 20px/1.3 var(--sans); color:var(--testo); background:transparent; border:1px solid var(--ciano-t);
     padding:12px 16px; border-radius:0; clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px); }
-  #domanda::placeholder, #domanda2::placeholder { color:var(--ciano); opacity:.9; }
-  #domanda2 { width:100%; margin-top:8px; resize:none; font:600 17px/1.3 var(--sans); color:var(--testo); background:transparent;
-    border:1px dashed var(--ciano-t); padding:8px 14px; }
-  #domanda2:focus { outline:none; border:2px solid var(--ciano); box-shadow:0 0 14px var(--ciano-t); }
-  #diagnosi { font:11px/1.3 var(--mono); color:var(--tenue); letter-spacing:.5px; margin-top:4px; }
+  #domanda::placeholder { color:var(--ciano); opacity:.9; }
   .riga-domanda { display:flex; gap:8px; align-items:stretch; }
   .riga-domanda #domanda { flex:1; min-width:0; }
   #invia { flex:none; font:700 15px/1 var(--mono); letter-spacing:2px; color:#00141c; background:var(--ciano); border:0; padding:0 14px;
@@ -77,16 +73,14 @@
     <div id="ora">--:--</div>
   </header>
   <div class="riga-domanda">
-    <input id="domanda" type="text" autocomplete="off" placeholder="● Scorra qui e pizzichi per parlare" aria-label="Domanda per Jarvis">
+    <input id="domanda" type="text" autocomplete="off" placeholder="● Pizzichi qui e parli" aria-label="Domanda per Jarvis">
     <button id="invia" type="button">INVIA ▶</button>
   </div>
-  <textarea id="domanda2" rows="1" placeholder="● Oppure qui (prova)" aria-label="Domanda per Jarvis, campo di prova"></textarea>
   <div id="ricevuto"></div>
   <div id="stato">IN ASCOLTO</div>
   <div id="conv"></div>
   <button id="ascolta" type="button">▶ ASCOLTA LA RISPOSTA</button>
   <footer><span>● PARLA · ▲▼ SCORRI</span><span id="nota">RISPONDE IL JARVIS COMPLETO</span></footer>
-  <div id="diagnosi">DIAGNOSI · FUOCO: — · GESTO: — · CLIC: 0</div>
 </div>
 <script>
 "use strict";
@@ -196,14 +190,15 @@ async function preparaVoce(id) {
 // La dettatura degli occhiali consegna il testo nel campo: con «change», «input», a volte senza alcun evento.
 // Per non perderlo: si ascoltano tutti gli eventi, si controlla comunque il campo due volte al secondo, si mostra
 // cosa è arrivato e si invia dopo un secondo di silenzio; c'è anche il pulsante INVIA.
-// Due campi (riga e area di testo): si usa quello in cui arriva la dettatura.
-const campi = () => [$("domanda"), $("domanda2")];
+// Guida Meta: il compositore (voce o scrittura a mano) si apre solo se è lei a portare il fuoco sul campo con un gesto
+// e a pizzicarlo. La pagina non sposta né toglie mai il fuoco dal campo e non simula clic (25/10: così funziona in Visore).
+const campi = () => [$("domanda")];
 const testoCampi = () => campi().map(c => c.value.trim()).filter(Boolean).join(" ");
 function invia() {
   const t = testoCampi();
   if (!t || t === ultimoInviato || occupato) return;
   ultimoInviato = t;
-  campi().forEach(c => { c.value = ""; c.blur(); });
+  campi().forEach(c => { c.value = ""; });
   $("ricevuto").textContent = "";
   chiedi(t);
 }
@@ -220,40 +215,15 @@ function testoArrivato(evento) {
 for (const c of campi()) {
   for (const ev of ["input", "change", "compositionend", "blur", "keyup"]) c.addEventListener(ev, () => testoArrivato(ev));
   c.addEventListener("keydown", e => { if (e.key === "Enter" && c.value.trim()) { e.preventDefault(); invia(); } });
-  // Come la UI Toolkit di Meta: il pizzico (Enter) diventa un clic sul campo, ed è il clic che apre la dettatura.
-  // Sugli occhiali arriva solo la pressione, non il rilascio: il clic parte subito.
-  c.addEventListener("keydown", e => { if (e.key === "Enter" && !c.value.trim()) c.click(); });
 }
 setInterval(() => { if (testoCampi() !== ultimoVisto) testoArrivato("lettura"); }, 500);
 $("invia").addEventListener("click", () => { if (testoCampi()) invia(); else $("ricevuto").textContent = "CAMPO VUOTO: SCORRA SUL CAMPO, PIZZICHI E DETTI"; });
 
-// Diagnosi sugli occhiali: cosa è selezionato, quale gesto arriva, se il campo riceve il clic.
-const diag = { fuoco: "—", gesto: "—", clic: 0 };
-function scriviDiagnosi() { $("diagnosi").textContent = `DIAGNOSI · FUOCO: ${diag.fuoco} · GESTO: ${diag.gesto} · CLIC: ${diag.clic}`; }
-const nome = el => el ? (el.id || el.tagName).toUpperCase() : "NESSUNO";
-let ultimoCampo = null, quandoCampo = 0;
-document.addEventListener("focusin", e => {
-  diag.fuoco = nome(e.target);
-  if (campi().includes(e.target)) { ultimoCampo = e.target; quandoCampo = Date.now(); }
-  scriviDiagnosi();
-}, true);
-document.addEventListener("focusout", e => { if (campi().includes(e.target)) quandoCampo = Date.now(); }, true);
-document.addEventListener("keydown", e => {
-  diag.gesto = `${e.key} SU ${nome(e.target)} (ATTIVO ${nome(document.activeElement)})`;
-  scriviDiagnosi();
-  // Il pizzico arriva alla pagina e non al campo, ma il campo era selezionato fino a un attimo fa: il clic va al campo.
-  if (e.key === "Enter" && !campi().includes(e.target) && ultimoCampo && !ultimoCampo.value.trim()
-      && Date.now() - quandoCampo < 3000 && !["INVIA", "ASCOLTA"].includes(nome(e.target))) {
-    ultimoCampo.focus();
-    ultimoCampo.click();
-  }
-}, true);
-for (const c of campi()) c.addEventListener("click", () => { diag.clic++; diag.gesto += " +CLIC " + c.id.toUpperCase(); scriviDiagnosi(); });
 $("ascolta").addEventListener("click", () => { if (ultimaVoce) { ultimaVoce.currentTime = 0; ultimaVoce.play().catch(() => {}); } });
 
 // Su e giù scorrono le risposte; il resto lo gestisce la navigazione degli occhiali.
 document.addEventListener("keydown", e => {
-  if (e.target === $("domanda") || e.target === $("domanda2")) return;
+  if (e.target === $("domanda")) return;
   if (e.key === "ArrowDown" || e.key === "ArrowUp") {
     const c = $("conv");
     if (c.scrollHeight > c.clientHeight) { e.preventDefault(); c.scrollBy({ top: e.key === "ArrowDown" ? 90 : -90 }); }
