@@ -1,14 +1,5 @@
 [
  {
-  "nome": "galatina",
-  "centro": [
-   40.1745,
-   18.1695
-  ],
-  "raggio": 6000,
-  "file": "galatina.json"
- },
- {
   "nome": "galatone",
   "centro": [
    40.146,
@@ -16,6 +7,15 @@
   ],
   "raggio": 4000,
   "file": "galatone.json"
+ },
+ {
+  "nome": "galatina",
+  "centro": [
+   40.1745,
+   18.1695
+  ],
+  "raggio": 6000,
+  "file": "galatina.json"
  },
  {
   "nome": "nardo",
