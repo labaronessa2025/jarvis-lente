@@ -128,16 +128,22 @@ async function chiedi(domanda) {
     const { id } = await (await chiamata(URL_DATI + "?domanda", { method: "POST", body: JSON.stringify({ testo: domanda }) })).json();
     const fine = Date.now() + ATTESA_MAX;
     while (Date.now() < fine) {
-      await pausa(1500);
+      await pausa(800);
       const r = await (await chiamata(URL_DATI + "?risposta=" + id)).json();
-      if (r.stato === "pronta") {
+      if (r.stato === "scrive") {
+        // Il testo arriva mentre Jarvis lo scrive.
+        scambio.classList.remove("attesa");
+        scambio.querySelector(".risposto").textContent = r.testo + " ▍";
+        stato("JARVIS STA RISPONDENDO…");
+      } else if (r.stato === "pronta") {
         scambio.classList.remove("attesa");
         scambio.querySelector(".risposto").textContent = r.risposta;
-        stato("RISPOSTA RICEVUTA");
-        if (r.audio) await preparaVoce(id);
+        stato(r.audio ? "RISPOSTA RICEVUTA" : "RISPOSTA RICEVUTA · VOCE IN ARRIVO");
+        aspettaVoce(id, r.audio);
         return r.risposta;
+      } else if (r.stato === "attesa" && Date.now() > fine - ATTESA_MAX + 30000) {
+        stato("IN CODA · IL MAC È ACCESO?");
       }
-      if (r.stato === "attesa" && Date.now() > fine - ATTESA_MAX + 30000) stato("IN CODA · IL MAC È ACCESO?");
     }
     throw new Error("nessuna risposta: il Mac è acceso?");
   } catch (e) {
@@ -148,6 +154,16 @@ async function chiedi(domanda) {
     occupato = false;
     $("app").classList.remove("pensa");
   }
+}
+
+// La voce arriva qualche secondo dopo il testo: si controlla ancora per 25 secondi, senza bloccare la pagina.
+async function aspettaVoce(id, pronta) {
+  const fine = Date.now() + 25000;
+  while (!pronta && Date.now() < fine) {
+    await pausa(1000);
+    try { pronta = (await (await chiamata(URL_DATI + "?risposta=" + id)).json()).audio === true; } catch (e) { return; }
+  }
+  if (pronta) { await preparaVoce(id); stato("RISPOSTA RICEVUTA"); }
 }
 
 async function preparaVoce(id) {
