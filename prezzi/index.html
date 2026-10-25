@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>Prezzi d'acquisto</title>
+<style>
+  /* Stesso HUD di «Jarvis lente»: nero trasparente sulla lente, ciano che brilla, 600×600 senza scorrimento. */
+  :root {
+    --ciano:#3fd4ff; --ciano-t:#3fd4ff55; --ciano-f:#3fd4ff22; --testo:#e8f7ff; --tenue:#8fb3c4;
+    --su:#ff5a4e; --giu:#5ef0a8; --ambra:#ffb340;
+    --mono:"SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    --sans:"SF Pro Display", -apple-system, "Roboto", "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; color:var(--testo); font:20px/1.3 var(--sans); touch-action:none; }
+  #app { position:relative; display:flex; flex-direction:column; height:100%; padding:18px 22px 14px; }
+  #app::before, #app::after { content:""; position:absolute; width:34px; height:34px; border:2px solid var(--ciano); opacity:.7; }
+  #app::before { top:6px; left:6px; border-right:0; border-bottom:0; }
+  #app::after { bottom:6px; right:6px; border-left:0; border-top:0; }
+  header { display:flex; align-items:center; gap:14px; margin-bottom:12px; }
+  .simbolo { width:46px; height:46px; flex:none; border:2px solid var(--ciano); border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font:700 24px/1 var(--mono); color:var(--ciano); text-shadow:0 0 8px var(--ciano-t); box-shadow:0 0 10px var(--ciano-f) inset; }
+  .marchio { flex:1; }
+  h1 { font:700 21px/1.1 var(--sans); letter-spacing:4px; color:var(--ciano); text-shadow:0 0 10px var(--ciano-t); }
+  .sotto { font:12px/1.6 var(--mono); letter-spacing:2px; color:var(--tenue); }
+  #ora { font:600 24px/1 var(--mono); text-align:right; }
+  nav { display:flex; gap:6px; margin-bottom:10px; }
+  nav button { flex:1; font:600 14px/1 var(--mono); letter-spacing:2px; color:var(--tenue); background:transparent; border:1px solid var(--ciano-t);
+    padding:8px 0; clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%); }
+  nav button.attiva { color:#00141c; background:var(--ciano); border-color:var(--ciano); }
+  main { flex:1; display:flex; flex-direction:column; min-height:0; }
+  #lista { flex:1; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:var(--ciano-t) transparent; padding-right:4px; }
+  #lista::-webkit-scrollbar { width:4px; } #lista::-webkit-scrollbar-thumb { background:var(--ciano-t); }
+  .etichetta { font:12px/1 var(--mono); letter-spacing:3px; color:var(--ciano); opacity:.85; margin:2px 0 8px; display:flex; align-items:center; gap:8px; }
+  .etichetta::after { content:""; flex:1; height:1px; background:linear-gradient(90deg,var(--ciano-t),transparent); }
+  .riga { position:relative; display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 10px; width:100%; text-align:left; color:inherit; font:inherit;
+    padding:7px 12px 7px 14px; margin-bottom:6px; border:1px solid #ffffff12; background:linear-gradient(90deg,#ffffff0a,transparent 70%); }
+  .riga:focus { outline:none; }
+  .riga .dett { display:none; }
+  .riga.sel .dett { display:block; }
+  .riga::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--colore,var(--ciano)); box-shadow:0 0 8px var(--colore,var(--ciano)); }
+  .riga.su { --colore:var(--su); } .riga.giu { --colore:var(--giu); }
+  .riga.sel { border-color:var(--ciano); background:linear-gradient(90deg,var(--ciano-f),transparent 80%); box-shadow:0 0 8px var(--ciano-f); }
+  .nome { flex:1; font:600 18px/1.25 var(--sans); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .nome::first-letter { text-transform:uppercase; }
+  .sel .nome { white-space:normal; }
+  .costo { font:700 20px/1 var(--mono); }
+  .unita { font:12px var(--mono); color:var(--tenue); }
+  .var { font:600 13px var(--mono); }
+  .su .var { color:var(--su); } .giu .var { color:var(--giu); }
+  .dett { flex-basis:100%; font:13px/1.5 var(--mono); color:var(--tenue); letter-spacing:1px; margin-top:4px; }
+  footer { display:flex; justify-content:space-between; font:12px/1 var(--mono); letter-spacing:1px; color:var(--tenue); margin-top:8px; padding-top:7px; border-top:1px solid var(--ciano-f); }
+  .led { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--giu); box-shadow:0 0 6px var(--giu); margin-right:6px; }
+  .led.spento { background:var(--su); box-shadow:0 0 6px var(--su); }
+  #avviso { font:16px/1.6 var(--mono); color:var(--ciano); letter-spacing:1px; padding:30px 4px; }
+  @media (max-width:420px) { html, body { font-size:17px; } #app { padding:12px; } }
+</style>
+<script src="../comune/saluto.js"></script>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="simbolo" aria-hidden="true">€</div>
+    <div class="marchio"><h1>PREZZI D'ACQUISTO</h1><div class="sotto">COSTI DALLE BOLLE · LA BARONESSA</div></div>
+    <div id="ora">--:--</div>
+  </header>
+  <nav id="schede"><button data-i="0">01 TUTTI</button><button data-i="1">02 VARIATI</button></nav>
+  <main id="contenuto"><p id="avviso">INIZIALIZZAZIONE…</p></main>
+  <footer><span id="stato"><span class="led spento"></span>LINK IN CORSO</span><span>◀▶ ELENCO · ▲▼ PRODOTTI · ● SYNC</span></footer>
+</div>
+<script>
+"use strict";
+const URL_DATI = "https://wbcszvjszruatmpigncd.supabase.co/functions/v1/jarvis-lente";
+let acquisti = [], generato = null, scheda = 0, sel = 0, errore = "", inLinea = false;
+
+// Stessa chiave di «Jarvis» (stesso sito): basta averla aperta una volta; altrimenti arriva nell'indirizzo (#k=…).
+function chiave() {
+  const m = location.hash.match(/k=([\w-]{20,})/);
+  if (m) {
+    try { localStorage.setItem("lente-k", m[1]); } catch (e) {}
+    history.replaceState(null, "", location.pathname);
+    return m[1];
+  }
+  try { return localStorage.getItem("lente-k") || ""; } catch (e) { return ""; }
+}
+const K = chiave();
+
+const euro = n => n.toFixed(2).replace(".", ",") + " €";
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const dataBreve = iso => iso ? iso.slice(8, 10) + "/" + iso.slice(5, 7) : "";
+const ora = d => d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+const variazione = x => x.precedente == null ? 0 : Math.round((x.costo - x.precedente) * 100) / 100;
+
+async function carica() {
+  if (!K) { errore = "CHIAVE ASSENTE · aprire prima l'app Jarvis o l'indirizzo completo"; disegna(); return; }
+  try {
+    const r = await fetch(URL_DATI, { headers: { "x-lente-key": K }, cache: "no-store" });
+    if (r.status === 401) throw new Error("chiave non valida");
+    if (!r.ok) throw new Error("errore " + r.status);
+    const j = await r.json();
+    acquisti = (j.dati && j.dati.acquisti) || [];
+    generato = j.dati && j.dati.generato;
+    errore = ""; inLinea = true;
+  } catch (e) {
+    inLinea = false;
+    if (!acquisti.length) errore = "LINK ASSENTE · " + e.message;
+  }
+  disegna();
+}
+
+function elenco() { return scheda === 1 ? acquisti.filter(x => variazione(x) !== 0) : acquisti; }
+
+function disegna() {
+  document.querySelectorAll("#schede button").forEach((b, i) => b.classList.toggle("attiva", i === scheda));
+  document.getElementById("ora").textContent = ora(new Date());
+  document.getElementById("stato").innerHTML = `<span class="led ${inLinea ? "" : "spento"}"></span>${inLinea ? "LINK ATTIVO" : "LINK ASSENTE"} · DATI ${generato ? ora(new Date(generato)) : "--:--"}`;
+  const main = document.getElementById("contenuto");
+  if (errore) { main.innerHTML = `<p id="avviso">${esc(errore)}</p>`; return; }
+  const v = elenco();
+  if (!v.length) { main.innerHTML = `<p id="avviso">${scheda === 1 ? "NESSUNA VARIAZIONE DI COSTO" : "NESSUN COSTO REGISTRATO"}</p>`; return; }
+  sel = Math.max(0, Math.min(sel, v.length - 1));
+  let h = `<div class="etichetta" id="conta"></div><div id="lista">`;
+  v.forEach((x, n) => {
+    const d = variazione(x), cls = d > 0 ? "su" : d < 0 ? "giu" : "";
+    h += `<button class="riga ${cls}" data-n="${n}"><span class="nome">${esc(x.prodotto)}</span>`
+      + `<span class="costo">${euro(x.costo)}</span><span class="unita">/${esc(x.unita || "u")}</span>`
+      + (d ? `<span class="var">${d > 0 ? "▲" : "▼"} ${euro(Math.abs(d))}</span>` : "")
+      + `<span class="dett">${x.fornitore ? esc(x.fornitore) + " · " : ""}BOLLA DEL ${dataBreve(x.data)}`
+      + (x.precedente != null ? ` · PRIMA ${euro(x.precedente)} (${dataBreve(x.data_precedente)})` : "") + ` · COSTO COME LETTO DAL DOCUMENTO</span>`
+      + `</button>`;
+  });
+  main.innerHTML = h + `</div>`;
+  seleziona(sel);
+}
+
+// La riga selezionata è quella col fuoco: si espande e la lista la porta in vista.
+function seleziona(n) {
+  const righe = document.querySelectorAll("#lista .riga");
+  if (!righe.length) return;
+  sel = Math.max(0, Math.min(n, righe.length - 1));
+  righe.forEach((r, i) => r.classList.toggle("sel", i === sel));
+  const r = righe[sel];
+  if (document.activeElement !== r) r.focus({ preventScroll: true });
+  r.scrollIntoView({ block: "nearest" });
+  const conta = document.getElementById("conta");
+  if (conta) conta.textContent = `${scheda === 1 ? "COSTI VARIATI" : "ULTIMO COSTO PER PRODOTTO"} · ${sel + 1}/${righe.length}`;
+}
+document.addEventListener("focusin", e => {
+  const r = e.target.closest && e.target.closest("#lista .riga");
+  if (r && +r.dataset.n !== sel) seleziona(+r.dataset.n);
+});
+
+document.addEventListener("keydown", e => {
+  const n = elenco().length;
+  switch (e.key) {
+    case "ArrowRight": case "ArrowLeft": scheda = 1 - scheda; sel = 0; break;
+    case "ArrowDown": case "ArrowUp":
+      // Un passo per gesto, sulla riga successiva o precedente; il passo del browser si annulla per non farne due.
+      if (!n) return;
+      e.preventDefault();
+      seleziona(sel + (e.key === "ArrowDown" ? 1 : -1));
+      return;
+    case "Enter": carica(); break;
+    case "Escape": case "Backspace": history.back(); return;
+    default: return;
+  }
+  e.preventDefault();
+  disegna();
+});
+document.querySelectorAll("#schede button").forEach(b => b.addEventListener("click", () => { scheda = +b.dataset.i; sel = 0; disegna(); }));
+document.addEventListener("visibilitychange", () => { if (!document.hidden) carica(); });
+setInterval(carica, 5 * 60 * 1000);
+setInterval(disegna, 60 * 1000);
+
+// WebMCP: «Hey Meta, quanto pago le cicorie?» con l'app aperta.
+function registraStrumenti() {
+  const mc = document.modelContext;
+  if (!mc || typeof mc.registerTool !== "function") return;
+  try {
+    mc.registerTool({
+      name: "costo_acquisto",
+      description: "Costo d'acquisto di un prodotto di La Baronessa dall'ultima bolla del fornitore (non il prezzo di vendita). Use for 'quanto pago', 'a quanto compro', purchase cost questions.",
+      inputSchema: { type: "object", properties: { prodotto: { type: "string", description: "nome del prodotto, es. cicorie, pomodori, mele" } }, required: ["prodotto"] },
+      execute: async (input) => {
+        if (!acquisti.length) await carica();
+        const q = String((input && input.prodotto) || "").toLowerCase().trim();
+        const trovati = acquisti.filter(x => q && x.prodotto.toLowerCase().includes(q));
+        if (!trovati.length) return `Nessun costo registrato per ${q || "quel prodotto"}.`;
+        sel = acquisti.indexOf(trovati[0]); scheda = 0; disegna();
+        return trovati.slice(0, 3).map(x => `${x.prodotto}: ${euro(x.costo)} al ${x.unita || "pezzo"}, bolla del ${dataBreve(x.data)}`).join("; ") + ".";
+      },
+    });
+  } catch (e) {}
+}
+
+registraStrumenti();
+disegna();
+carica();
+JarvisSaluto({ app: "prezzi", chiave: K, url: URL_DATI, sotto: "LISTINO FORNITORI · ANALISI IN CORSO", frasi: [
+  { audio: "prezzi-1", scritta: "I costi dei fornitori, Signore. Le bolle non mentono." },
+  { audio: "prezzi-2", scritta: "Nessun fornitore fa sconti a Iron Man, Signore." },
+  { audio: "prezzi-3", scritta: "Si sieda, Signore, prima di guardare i pomodori." },
+] });
+</script>
+</body>
+</html>
