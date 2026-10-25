@@ -230,8 +230,24 @@ $("invia").addEventListener("click", () => { if (testoCampi()) invia(); else $("
 // Diagnosi sugli occhiali: cosa è selezionato, quale gesto arriva, se il campo riceve il clic.
 const diag = { fuoco: "—", gesto: "—", clic: 0 };
 function scriviDiagnosi() { $("diagnosi").textContent = `DIAGNOSI · FUOCO: ${diag.fuoco} · GESTO: ${diag.gesto} · CLIC: ${diag.clic}`; }
-document.addEventListener("focusin", e => { diag.fuoco = (e.target.id || e.target.tagName).toUpperCase(); scriviDiagnosi(); }, true);
-document.addEventListener("keydown", e => { diag.gesto = e.key; scriviDiagnosi(); }, true);
+const nome = el => el ? (el.id || el.tagName).toUpperCase() : "NESSUNO";
+let ultimoCampo = null, quandoCampo = 0;
+document.addEventListener("focusin", e => {
+  diag.fuoco = nome(e.target);
+  if (campi().includes(e.target)) { ultimoCampo = e.target; quandoCampo = Date.now(); }
+  scriviDiagnosi();
+}, true);
+document.addEventListener("focusout", e => { if (campi().includes(e.target)) quandoCampo = Date.now(); }, true);
+document.addEventListener("keydown", e => {
+  diag.gesto = `${e.key} SU ${nome(e.target)} (ATTIVO ${nome(document.activeElement)})`;
+  scriviDiagnosi();
+  // Il pizzico arriva alla pagina e non al campo, ma il campo era selezionato fino a un attimo fa: il clic va al campo.
+  if (e.key === "Enter" && !campi().includes(e.target) && ultimoCampo && !ultimoCampo.value.trim()
+      && Date.now() - quandoCampo < 3000 && !["INVIA", "ASCOLTA"].includes(nome(e.target))) {
+    ultimoCampo.focus();
+    ultimoCampo.click();
+  }
+}, true);
 for (const c of campi()) c.addEventListener("click", () => { diag.clic++; diag.gesto += " +CLIC " + c.id.toUpperCase(); scriviDiagnosi(); });
 $("ascolta").addEventListener("click", () => { if (ultimaVoce) { ultimaVoce.currentTime = 0; ultimaVoce.play().catch(() => {}); } });
 
