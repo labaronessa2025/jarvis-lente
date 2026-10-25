@@ -220,8 +220,9 @@ function testoArrivato(evento) {
 for (const c of campi()) {
   for (const ev of ["input", "change", "compositionend", "blur", "keyup"]) c.addEventListener(ev, () => testoArrivato(ev));
   c.addEventListener("keydown", e => { if (e.key === "Enter" && c.value.trim()) { e.preventDefault(); invia(); } });
-  // Come la UI Toolkit di Meta: il pizzico (Enter) diventa un clic sul campo al rilascio, ed è il clic che apre la dettatura.
-  c.addEventListener("keyup", e => { if (e.key === "Enter" && !c.value.trim()) c.click(); });
+  // Come la UI Toolkit di Meta: il pizzico (Enter) diventa un clic sul campo, ed è il clic che apre la dettatura.
+  // Sugli occhiali arriva solo la pressione, non il rilascio: il clic parte subito.
+  c.addEventListener("keydown", e => { if (e.key === "Enter" && !c.value.trim()) c.click(); });
 }
 setInterval(() => { if (testoCampi() !== ultimoVisto) testoArrivato("lettura"); }, 500);
 $("invia").addEventListener("click", () => { if (testoCampi()) invia(); else $("ricevuto").textContent = "CAMPO VUOTO: SCORRA SUL CAMPO, PIZZICHI E DETTI"; });
