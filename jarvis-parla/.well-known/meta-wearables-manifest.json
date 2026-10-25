@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "name": "Parla",
+  "description": "Parla con Jarvis dagli occhiali: domande dettate, risposte scritte e con la sua voce.",
+  "appearance": {
+    "theme_color": "#3FD4FF",
+    "icon": {
+      "src": "../../icona.svg"
+    }
+  }
+}
