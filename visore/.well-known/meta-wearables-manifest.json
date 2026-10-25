@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "name": "Visore",
+  "description": "Bussola HUD con i luoghi intorno, distanza e obiettivo da raggiungere.",
+  "appearance": {
+    "theme_color": "#3FD4FF",
+    "icon": {
+      "src": "../icona-jarvis.svg"
+    }
+  }
+}
