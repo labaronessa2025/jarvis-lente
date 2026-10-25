@@ -31,7 +31,11 @@
   #ora { font:600 24px/1 var(--mono); }
   #domanda { width:100%; font:600 20px/1.3 var(--sans); color:var(--testo); background:transparent; border:1px solid var(--ciano-t);
     padding:12px 16px; border-radius:0; clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px); }
-  #domanda::placeholder { color:var(--ciano); opacity:.9; }
+  #domanda::placeholder, #domanda2::placeholder { color:var(--ciano); opacity:.9; }
+  #domanda2 { width:100%; margin-top:8px; resize:none; font:600 17px/1.3 var(--sans); color:var(--testo); background:transparent;
+    border:1px dashed var(--ciano-t); padding:8px 14px; }
+  #domanda2:focus { outline:none; border:2px solid var(--ciano); box-shadow:0 0 14px var(--ciano-t); }
+  #diagnosi { font:11px/1.3 var(--mono); color:var(--tenue); letter-spacing:.5px; margin-top:4px; }
   .riga-domanda { display:flex; gap:8px; align-items:stretch; }
   .riga-domanda #domanda { flex:1; min-width:0; }
   #invia { flex:none; font:700 15px/1 var(--mono); letter-spacing:2px; color:#00141c; background:var(--ciano); border:0; padding:0 14px;
@@ -76,11 +80,13 @@
     <input id="domanda" type="text" autocomplete="off" placeholder="● Scorra qui e pizzichi per parlare" aria-label="Domanda per Jarvis">
     <button id="invia" type="button">INVIA ▶</button>
   </div>
+  <textarea id="domanda2" rows="1" placeholder="● Oppure qui (prova)" aria-label="Domanda per Jarvis, campo di prova"></textarea>
   <div id="ricevuto"></div>
   <div id="stato">IN ASCOLTO</div>
   <div id="conv"></div>
   <button id="ascolta" type="button">▶ ASCOLTA LA RISPOSTA</button>
   <footer><span>● PARLA · ▲▼ SCORRI</span><span id="nota">RISPONDE IL JARVIS COMPLETO</span></footer>
+  <div id="diagnosi">DIAGNOSI · FUOCO: — · GESTO: — · CLIC: 0</div>
 </div>
 <script>
 "use strict";
@@ -190,34 +196,45 @@ async function preparaVoce(id) {
 // La dettatura degli occhiali consegna il testo nel campo: con «change», «input», a volte senza alcun evento.
 // Per non perderlo: si ascoltano tutti gli eventi, si controlla comunque il campo due volte al secondo, si mostra
 // cosa è arrivato e si invia dopo un secondo di silenzio; c'è anche il pulsante INVIA.
+// Due campi (riga e area di testo): si usa quello in cui arriva la dettatura.
+const campi = () => [$("domanda"), $("domanda2")];
+const testoCampi = () => campi().map(c => c.value.trim()).filter(Boolean).join(" ");
 function invia() {
-  const campo = $("domanda"), t = campo.value.trim();
+  const t = testoCampi();
   if (!t || t === ultimoInviato || occupato) return;
   ultimoInviato = t;
-  campo.value = "";
+  campi().forEach(c => { c.value = ""; c.blur(); });
   $("ricevuto").textContent = "";
-  campo.blur();
   chiedi(t);
 }
 let attesaInput = null, ultimoVisto = "";
 function testoArrivato(evento) {
   $("nota").textContent = "EVENTO: " + evento.toUpperCase();
-  const t = $("domanda").value.trim();
+  const t = testoCampi();
   if (t === ultimoVisto) return;
   ultimoVisto = t;
   $("ricevuto").textContent = t ? "RICEVUTO: " + t : "";
   clearTimeout(attesaInput);
   if (t) attesaInput = setTimeout(invia, 1000);
 }
-for (const ev of ["input", "change", "compositionend", "blur", "keyup"]) $("domanda").addEventListener(ev, () => testoArrivato(ev));
-setInterval(() => { if ($("domanda").value.trim() !== ultimoVisto) testoArrivato("lettura"); }, 500);
-$("domanda").addEventListener("keydown", e => { if (e.key === "Enter" && $("domanda").value.trim()) { e.preventDefault(); invia(); } });
-$("invia").addEventListener("click", () => { if ($("domanda").value.trim()) invia(); else $("ricevuto").textContent = "CAMPO VUOTO: SCORRA SUL CAMPO, PIZZICHI E DETTI"; });
+for (const c of campi()) {
+  for (const ev of ["input", "change", "compositionend", "blur", "keyup"]) c.addEventListener(ev, () => testoArrivato(ev));
+  c.addEventListener("keydown", e => { if (e.key === "Enter" && c.value.trim()) { e.preventDefault(); invia(); } });
+}
+setInterval(() => { if (testoCampi() !== ultimoVisto) testoArrivato("lettura"); }, 500);
+$("invia").addEventListener("click", () => { if (testoCampi()) invia(); else $("ricevuto").textContent = "CAMPO VUOTO: SCORRA SUL CAMPO, PIZZICHI E DETTI"; });
+
+// Diagnosi sugli occhiali: cosa è selezionato, quale gesto arriva, se il campo riceve il clic.
+const diag = { fuoco: "—", gesto: "—", clic: 0 };
+function scriviDiagnosi() { $("diagnosi").textContent = `DIAGNOSI · FUOCO: ${diag.fuoco} · GESTO: ${diag.gesto} · CLIC: ${diag.clic}`; }
+document.addEventListener("focusin", e => { diag.fuoco = (e.target.id || e.target.tagName).toUpperCase(); scriviDiagnosi(); }, true);
+document.addEventListener("keydown", e => { diag.gesto = e.key; scriviDiagnosi(); }, true);
+for (const c of campi()) c.addEventListener("click", () => { diag.clic++; diag.gesto += " +CLIC " + c.id.toUpperCase(); scriviDiagnosi(); });
 $("ascolta").addEventListener("click", () => { if (ultimaVoce) { ultimaVoce.currentTime = 0; ultimaVoce.play().catch(() => {}); } });
 
 // Su e giù scorrono le risposte; il resto lo gestisce la navigazione degli occhiali.
 document.addEventListener("keydown", e => {
-  if (e.target === $("domanda")) return;
+  if (e.target === $("domanda") || e.target === $("domanda2")) return;
   if (e.key === "ArrowDown" || e.key === "ArrowUp") {
     const c = $("conv");
     if (c.scrollHeight > c.clientHeight) { e.preventDefault(); c.scrollBy({ top: e.key === "ArrowDown" ? 90 : -90 }); }
