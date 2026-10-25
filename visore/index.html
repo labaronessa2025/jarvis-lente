@@ -15,7 +15,7 @@
     --sans:"SF Pro Display", -apple-system, "Roboto", "Helvetica Neue", Arial, sans-serif;
   }
   * { box-sizing:border-box; margin:0; padding:0; }
-  html, body { width:100%; height:100%; overflow:hidden; background:#000; color:var(--testo); font:20px/1.3 var(--sans); touch-action:none; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; color:var(--testo); font:20px/1.3 var(--sans); }
   #app { position:relative; height:100%; }
   button { font:inherit; color:inherit; background:none; border:0; }
   button:focus, input:focus { outline:none; }
@@ -395,7 +395,8 @@ function disegnaChip() {
 }
 async function cerca(testo) {
   testo = testo.trim();
-  if (!testo) return;
+  if (!testo || testo === ultimaRicerca && $("risultati").classList.contains("aperto")) return;
+  ultimaRicerca = testo;
   apriRisultati(`<p>RICERCA DI «${esc(testo)}»…</p>`);
   const t = testo.toLowerCase();
   let trovati = tuttiQui.filter(l => l.nome.toLowerCase().includes(t));
@@ -434,7 +435,13 @@ function impostaObiettivo(l) {
 }
 
 // ── Gesti e clic ──────────────────────────────────────────────────
-$("cerca").addEventListener("submit", e => { e.preventDefault(); cerca($("q").value); $("q").blur(); });
+// Il compositore degli occhiali (scrittura a mano o voce) si apre solo se è lei a portare il fuoco sul campo con un gesto
+// e a pizzicarlo: la pagina non sposta mai il fuoco sul campo e non lo toglie. Il testo confermato arriva con input/change.
+$("cerca").addEventListener("submit", e => { e.preventDefault(); cerca($("q").value); });
+let attesaRicerca = 0;
+$("q").addEventListener("input", () => { clearTimeout(attesaRicerca); attesaRicerca = setTimeout(() => cerca($("q").value), 900); });
+$("q").addEventListener("change", () => { clearTimeout(attesaRicerca); cerca($("q").value); });
+let ultimaRicerca = "";
 $("chip").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   if (b.dataset.a === "paese") { if (pos) caricaLuoghi(true); return; }
@@ -458,7 +465,7 @@ document.addEventListener("keydown", e => {
   const a = document.activeElement;
   const inQ = a === $("q"), inChip = a && a.parentElement === $("chip"), inRis = a && a.closest && a.closest("#risultati"), inMk = a && a.classList && a.classList.contains("mk");
   if (e.key === "Escape" || (e.key === "Backspace" && !inQ)) {
-    if ($("risultati").classList.contains("aperto")) { e.preventDefault(); chiudiRisultati(); $("q").focus(); return; }
+    if ($("risultati").classList.contains("aperto")) { e.preventDefault(); chiudiRisultati(); ($("chip").querySelector(".attiva") || $("chip").firstChild).focus(); return; }
     if (inQ || inChip) { e.preventDefault(); a.blur(); const m = marcatoriInOrdine(); if (m.length) m[Math.floor(m.length / 2)].focus(); return; }
     history.back(); return;
   }
@@ -466,7 +473,8 @@ document.addEventListener("keydown", e => {
   if (inRis && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
     e.preventDefault();
     const bs = [...$("risultati").querySelectorAll("button")], i = bs.indexOf(a) + (e.key === "ArrowDown" ? 1 : -1);
-    if (i < 0) $("q").focus(); else if (bs[i]) { bs[i].focus(); bs[i].scrollIntoView({ block: "nearest" }); }
+    if (i < 0) { chiudiRisultati(); ($("chip").querySelector(".attiva") || $("chip").firstChild).focus(); }
+    else if (bs[i]) { bs[i].focus(); bs[i].scrollIntoView({ block: "nearest" }); }
     return;
   }
   if (inChip && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
@@ -475,7 +483,10 @@ document.addEventListener("keydown", e => {
     if (bs[i]) bs[i].focus();
     return;
   }
-  if (e.key === "ArrowUp") { e.preventDefault(); inChip ? $("q").focus() : ($("chip").querySelector(".attiva") || $("chip").firstChild).focus(); return; }
+  if (e.key === "ArrowUp") {
+    if (inChip) return;   // dalle categorie alla barra ci pensa il gesto stesso (fuoco del sistema), mai la pagina
+    e.preventDefault(); ($("chip").querySelector(".attiva") || $("chip").firstChild).focus(); return;
+  }
   if (e.key === "ArrowDown" && (inChip || !inMk)) { e.preventDefault(); const m = marcatoriInOrdine(); if (m.length) m[Math.floor(m.length / 2)].focus(); return; }
   if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && avviato) {
     const m = marcatoriInOrdine(); if (!m.length) return;
