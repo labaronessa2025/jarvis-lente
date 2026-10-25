@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>Visore</title>
+<style>
+  /* Stesso HUD delle altre web app di Jarvis: nero (trasparente sulla lente), ciano, 600×600 senza scorrimento. */
+  :root {
+    --ciano:#3fd4ff; --ciano-t:#3fd4ff55; --ciano-f:#3fd4ff22; --testo:#e8f7ff; --tenue:#8fb3c4;
+    --verde:#5ef0a8; --rosso:#ff5a4e; --ambra:#ffb340;
+    --mono:"SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    --sans:"SF Pro Display", -apple-system, "Roboto", "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; color:var(--testo); font:20px/1.3 var(--sans); touch-action:none; }
+  #app { position:relative; height:100%; }
+  button { font:inherit; color:inherit; background:none; border:0; }
+  button:focus, input:focus { outline:none; }
+
+  /* Barra di ricerca in stile Google Maps */
+  #cerca { position:absolute; left:22px; right:22px; top:16px; display:flex; align-items:center; gap:10px; height:46px; padding:0 16px;
+    border:1px solid var(--ciano-t); border-radius:23px; background:#000; }
+  #cerca:focus-within { border-color:var(--ciano); box-shadow:0 0 10px var(--ciano-f); }
+  #cerca svg { flex:none; }
+  #q { flex:1; min-width:0; height:100%; background:transparent; border:0; color:var(--testo); font:18px var(--sans); }
+  #q::placeholder { color:var(--tenue); }
+  #ora { font:600 16px var(--mono); color:var(--tenue); }
+  #chip { position:absolute; left:22px; right:22px; top:70px; display:flex; gap:6px; }
+  #chip button { flex:1; padding:6px 0; font:600 10px/1 var(--mono); letter-spacing:0; color:var(--tenue); border:1px solid var(--ciano-f); border-radius:13px; }
+  #chip button.attiva { color:#00141c; background:var(--ciano); border-color:var(--ciano); }
+  #chip button:focus, #risultati button:focus { border-color:var(--ciano); color:var(--testo); box-shadow:0 0 8px var(--ciano-t); }
+  #chip button.attiva:focus { color:#00141c; }
+
+  /* Campo dei marcatori: ±45° intorno alla direzione dello sguardo */
+  #campo { position:absolute; left:0; right:0; top:100px; height:380px; }
+  .mk { position:absolute; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; padding:4px 8px; border-radius:8px;
+    white-space:nowrap; text-shadow:0 0 6px var(--ciano-t); border:1px solid transparent; max-width:200px; }
+  .mk b { font:600 16px/1.2 var(--sans); color:var(--ciano); overflow:hidden; text-overflow:ellipsis; max-width:184px; }
+  .mk span { font:13px/1.3 var(--mono); color:var(--tenue); }
+  .mk i { width:12px; height:12px; margin-top:4px; border:2px solid var(--ciano); transform:rotate(45deg); box-shadow:0 0 6px var(--ciano-t); }
+  .mk:focus { border-color:var(--ciano); background:#00141c; box-shadow:0 0 10px var(--ciano-t); }
+  .mk.obiettivo b, .mk.obiettivo span { color:var(--verde); text-shadow:0 0 8px #5ef0a855; }
+  .mk.obiettivo i { border-color:var(--verde); background:var(--verde); box-shadow:0 0 10px var(--verde); }
+  .bordo { position:absolute; top:150px; font:600 15px/1.3 var(--mono); color:var(--verde); text-align:center; text-shadow:0 0 8px #5ef0a855; }
+  .bordo big { display:block; font-size:38px; line-height:1; }
+  #bordo-sx { left:14px; } #bordo-dx { right:14px; }
+
+  /* Bussola in basso: scorre quando si gira la testa */
+  #obiettivo { position:absolute; left:22px; right:22px; bottom:112px; text-align:center; font:600 15px/1.3 var(--mono); letter-spacing:1px; color:var(--verde); }
+  #bussola { position:absolute; left:22px; right:22px; bottom:20px; height:56px; overflow:hidden; border-top:1px solid var(--ciano-t);
+    -webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent); mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent); }
+  #scala { position:absolute; left:0; top:0; height:100%; will-change:transform; }
+  .tk { position:absolute; top:0; width:1px; height:8px; background:var(--ciano); }
+  .tk.l { height:14px; }
+  .cd { position:absolute; top:18px; transform:translateX(-50%); font:600 16px/1 var(--mono); color:var(--ciano); }
+  .cd.n { color:var(--rosso); }
+  .og { position:absolute; top:2px; width:10px; height:10px; transform:translateX(-50%) rotate(45deg); background:var(--verde); box-shadow:0 0 8px var(--verde); }
+  #puntatore { position:absolute; left:50%; bottom:74px; transform:translateX(-50%); font:600 13px/1 var(--mono); color:var(--testo); text-align:center; }
+  #puntatore::after { content:""; display:block; margin:3px auto 0; width:0; height:0; border:7px solid transparent; border-bottom:0; border-top:9px solid var(--testo); }
+
+  /* Risultati della ricerca */
+  #risultati { position:absolute; left:22px; right:22px; top:100px; bottom:140px; background:#000; border:1px solid var(--ciano-t); border-radius:12px;
+    padding:8px; overflow-y:auto; display:none; }
+  #risultati.aperto { display:block; }
+  #risultati button { display:flex; width:100%; align-items:baseline; gap:10px; text-align:left; padding:9px 12px; margin-bottom:4px; border:1px solid #ffffff12; border-radius:8px; }
+  #risultati b { flex:1; font:600 17px/1.25 var(--sans); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #risultati em { font:normal 13px var(--mono); color:var(--tenue); }
+  #risultati p { font:15px/1.5 var(--mono); color:var(--tenue); padding:14px 8px; }
+
+  #stato { position:absolute; left:0; right:0; top:230px; text-align:center; font:15px/1.6 var(--mono); letter-spacing:1px; color:var(--ciano); padding:0 40px; }
+  #avvia { display:block; margin:16px auto 0; padding:10px 26px; border:1px solid var(--ciano); border-radius:22px; font:600 15px var(--mono); letter-spacing:2px; color:var(--ciano); }
+  #avvia:focus { background:var(--ciano); color:#00141c; }
+  #osm { position:absolute; left:26px; top:104px; font:10px var(--mono); color:#8fb3c488; letter-spacing:1px; }
+  #demo { position:absolute; right:26px; top:104px; font:11px var(--mono); color:var(--ambra); letter-spacing:2px; }
+</style>
+<script src="../comune/saluto.js"></script>
+</head>
+<body>
+<div id="app">
+  <form id="cerca" role="search" autocomplete="off">
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="7" fill="none" stroke="#3fd4ff" stroke-width="2.5"/><path d="M15.5 15.5 22 22" stroke="#3fd4ff" stroke-width="2.5" stroke-linecap="round"/></svg>
+    <input id="q" type="search" enterkeyhint="search" placeholder="Cerca un luogo" aria-label="Cerca un luogo">
+    <span id="ora">--:--</span>
+  </form>
+  <div id="chip" role="toolbar" aria-label="Categorie"></div>
+  <div id="osm">© OPENSTREETMAP</div>
+  <div id="campo" aria-label="Luoghi davanti a lei"></div>
+  <div id="bordo-sx" class="bordo" hidden></div>
+  <div id="bordo-dx" class="bordo" hidden></div>
+  <div id="risultati" role="listbox" aria-label="Risultati"></div>
+  <div id="stato"></div>
+  <div id="obiettivo"></div>
+  <div id="puntatore">---°</div>
+  <div id="bussola"><div id="scala"></div></div>
+</div>
+<script>
+"use strict";
+// Visore: bussola HUD con i luoghi intorno (OpenStreetMap). Niente dati del negozio, niente chiavi: solo posizione e direzione.
+// Gesti della Neural Band: ◀▶ marcatore precedente/successivo · ▲ barra di ricerca e categorie · pizzico: imposta/annulla obiettivo.
+const URL_DATI = "https://wbcszvjszruatmpigncd.supabase.co/functions/v1/jarvis-lente";   // solo per la voce del saluto
+// Server pubblici di OpenStreetMap: a volte lenti, si prova il successivo.
+const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
+const PHOTON = "https://photon.komoot.io/api/";
+const CAMPO = 90;            // gradi visibili sulla larghezza della lente (±45°)
+const RAGGIO = 600;          // metri dei luoghi intorno
+const MAX_MK = 7;            // marcatori a schermo, i più vicini
+const DEMO = /[?&]demo\b/.test(location.search);
+
+const CATEGORIE = [
+  { id: "", nome: "TUTTO" },
+  { id: "bar", nome: "BAR", f: '["amenity"~"^(bar|cafe|pub)$"]', m: /^amenity=(bar|cafe|pub)$/ },
+  { id: "cibo", nome: "CIBO", f: '["amenity"~"^(restaurant|fast_food|ice_cream)$"]', m: /^amenity=(restaurant|fast_food|ice_cream)$/ },
+  { id: "farmacia", nome: "FARMACIA", f: '["amenity"="pharmacy"]', m: /^amenity=pharmacy$/ },
+  { id: "spesa", nome: "SPESA", f: '["shop"~"^(supermarket|convenience|greengrocer|bakery)$"]', m: /^shop=(supermarket|convenience|greengrocer|bakery)$/ },
+  { id: "banca", nome: "BANCA", f: '["amenity"~"^(bank|atm)$"]', m: /^amenity=(bank|atm)$/ },
+  { id: "benzina", nome: "BENZINA", f: '["amenity"="fuel"]', m: /^amenity=fuel$/ },
+  { id: "parcheggio", nome: "PARK", f: '["amenity"="parking"]', m: /^amenity=parking$/ },
+];
+const TIPI = { bar: "bar", cafe: "caffè", pub: "pub", restaurant: "ristorante", fast_food: "fast food", ice_cream: "gelateria", pharmacy: "farmacia",
+  supermarket: "supermercato", convenience: "alimentari", greengrocer: "fruttivendolo", bakery: "panificio", bank: "banca", atm: "bancomat",
+  fuel: "benzina", parking: "parcheggio", hospital: "ospedale", school: "scuola", place_of_worship: "chiesa", post_office: "posta",
+  townhall: "comune", police: "polizia", hotel: "hotel", museum: "museo", clothes: "abbigliamento", hairdresser: "parrucchiere" };
+
+let pos = null, precisione = null, rotta = null, luoghi = [], categoria = "", obiettivo = null;
+let caricatoDa = null, caricando = false, errore = "", avviato = false, risultati = [];
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const rad = g => g * Math.PI / 180;
+const norm = g => ((g % 360) + 360) % 360;
+const diff = (a, b) => ((a - b + 540) % 360) - 180;          // da b ad a, tra -180 e 180
+function distanza(a, b) {
+  const R = 6371000, dl = rad(b.lat - a.lat), dg = rad(b.lon - a.lon);
+  const h = Math.sin(dl / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dg / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function direzione(a, b) {
+  const y = Math.sin(rad(b.lon - a.lon)) * Math.cos(rad(b.lat));
+  const x = Math.cos(rad(a.lat)) * Math.sin(rad(b.lat)) - Math.sin(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.cos(rad(b.lon - a.lon));
+  return norm(Math.atan2(y, x) * 180 / Math.PI);
+}
+const metri = m => m < 1000 ? Math.round(m / 5) * 5 + " m" : (m / 1000).toFixed(m < 10000 ? 1 : 0).replace(".", ",") + " km";
+const piedi = m => m > 3000 ? "" : Math.max(1, Math.round(m / 80)) + " min";      // a piedi, ~4,8 km/h; oltre 3 km non ha senso
+const PUNTI = ["N", "NE", "E", "SE", "S", "SO", "O", "NO"];
+
+// ── Bussola in basso ──────────────────────────────────────────────
+const PXG = 556 / CAMPO;     // pixel per grado sulla larghezza della barra
+(function costruisciScala() {
+  let h = "";
+  for (let g = -360; g <= 720; g += 5) {
+    const x = (g + 360) * PXG, n = norm(g);
+    h += `<div class="tk ${n % 15 === 0 ? "l" : ""}" style="left:${x}px"></div>`;
+    if (n % 45 === 0) h += `<div class="cd ${n === 0 ? "n" : ""}" style="left:${x}px">${PUNTI[n / 45]}</div>`;
+    else if (n % 15 === 0) h += `<div class="cd" style="left:${x}px;font-size:11px;font-weight:400;color:var(--tenue)">${n}</div>`;
+  }
+  $("scala").innerHTML = h + `<div class="og" id="og" hidden></div>`;
+})();
+
+function disegnaBussola() {
+  if (rotta == null) { $("puntatore").textContent = "---°"; return; }
+  $("scala").style.transform = `translateX(${278 - (rotta + 360) * PXG}px)`;
+  $("puntatore").textContent = String(Math.round(rotta)).padStart(3, "0") + "° " + PUNTI[Math.round(rotta / 45) % 8];
+  const og = $("og");
+  if (obiettivo && pos) {
+    og.hidden = false;
+    og.style.left = (direzione(pos, obiettivo) + 360) * PXG + "px";
+  } else og.hidden = true;
+}
+
+// ── Marcatori ─────────────────────────────────────────────────────
+function disegnaMarcatori() {
+  const campo = $("campo");
+  const sx = $("bordo-sx"), dx = $("bordo-dx");
+  sx.hidden = dx.hidden = true;
+  if (!pos || rotta == null || !avviato) { campo.innerHTML = ""; return; }
+  const visti = [];
+  const candidati = luoghi.slice();
+  if (obiettivo && !candidati.some(l => l.id === obiettivo.id)) candidati.push(obiettivo);
+  for (const l of candidati) {
+    const d = distanza(pos, l), rel = diff(direzione(pos, l), rotta);
+    const eObiettivo = obiettivo && l.id === obiettivo.id;
+    if (Math.abs(rel) > CAMPO / 2) {
+      if (eObiettivo) {   // obiettivo fuori dal campo: freccia sul bordo verso cui girarsi
+        const b = rel < 0 ? sx : dx;
+        b.hidden = false;
+        b.innerHTML = `<big>${rel < 0 ? "◀" : "▶"}</big>${Math.round(Math.abs(rel))}°`;
+      }
+      continue;
+    }
+    visti.push({ l, d, rel, eObiettivo });
+  }
+  visti.sort((a, b) => (b.eObiettivo - a.eObiettivo) || a.d - b.d);
+  const scelti = visti.slice(0, MAX_MK);
+  // Più vicino = più in basso; le etichette che si sovrappongono salgono.
+  const posti = [];
+  const html = scelti.map(v => {
+    const x = Math.max(100, Math.min(500, 300 + v.rel / (CAMPO / 2) * 260));   // etichette mai tagliate dal bordo
+    let y = 300 - Math.min(1, Math.log10(Math.max(v.d, 10) / 10) / Math.log10(RAGGIO * 3 / 10)) * 260;
+    for (let giro = 0; giro < 8; giro++) {
+      const urta = posti.find(p => Math.abs(p.x - x) < 150 && Math.abs(p.y - y) < 54);
+      if (!urta) break;
+      y = urta.y - 56;
+    }
+    if (y < 0) { if (!v.eObiettivo) return ""; y = 0; }   // niente spazio: il marcatore lontano si salta, l'obiettivo mai
+    posti.push({ x, y });
+    v.x = x;
+    const tipo = v.l.tipo ? " · " + esc(v.l.tipo) : "";
+    return `<button class="mk${v.eObiettivo ? " obiettivo" : ""}" data-id="${esc(v.l.id)}" style="left:${x.toFixed(0)}px;top:${y.toFixed(0)}px">`
+      + `<b>${esc(v.l.nome)}</b><span>${metri(v.d)}${v.eObiettivo ? (piedi(v.d) ? " · " + piedi(v.d) : "") : tipo}</span><i></i></button>`;
+  }).join("");
+  const prima = document.activeElement && document.activeElement.classList.contains("mk") ? document.activeElement.dataset.id : null;
+  campo.innerHTML = html;
+  if (prima) {   // il marcatore col fuoco lo tiene anche mentre i marcatori si spostano
+    const b = campo.querySelector(`.mk[data-id="${CSS.escape(prima)}"]`);
+    if (b) b.focus({ preventScroll: true });
+  }
+}
+
+function disegnaObiettivo() {
+  const o = $("obiettivo");
+  if (!obiettivo || !pos) { o.textContent = ""; return; }
+  const d = distanza(pos, obiettivo);
+  o.textContent = d < 20 ? `◆ ARRIVATO · ${obiettivo.nome}` : `◆ OBIETTIVO · ${obiettivo.nome} · ${metri(d)}${piedi(d) ? " · " + piedi(d) + " a piedi" : ""}`;
+}
+
+function disegnaStato() {
+  const s = $("stato");
+  if (!avviato) {
+    s.innerHTML = `VISORE IN ATTESA<br><span style="color:var(--tenue)">bussola e posizione</span><button id="avvia">ATTIVA</button>`;
+    $("avvia").onclick = avvia;
+    if (!document.activeElement || document.activeElement === document.body) $("avvia").focus();
+    return;
+  }
+  let t = "";
+  if (notizia) t = notizia;
+  else if (errore) t = errore;
+  else if (!pos) t = "RICERCA POSIZIONE…";
+  else if (rotta == null) t = "BUSSOLA NON DISPONIBILE<br><span style='color:var(--tenue)'>muova la testa a otto</span>";
+  else if (caricando && !luoghi.length) t = "SCANSIONE DEI LUOGHI…";
+  else if (!luoghi.length && !obiettivo) t = "NESSUN LUOGO INTORNO";
+  s.innerHTML = t;
+}
+
+let ultimoDisegno = 0;
+function ciclo(t) {
+  if (t - ultimoDisegno > 66) {   // ~15 Hz: basta per la testa, risparmia la batteria
+    ultimoDisegno = t;
+    disegnaBussola(); disegnaMarcatori(); disegnaObiettivo();
+  }
+  requestAnimationFrame(ciclo);
+}
+
+// ── Sensori ───────────────────────────────────────────────────────
+let idPosizione = null;
+function suOrientamento(e) {
+  let h = null;
+  if (typeof e.webkitCompassHeading === "number") h = e.webkitCompassHeading;
+  else if (e.alpha != null && (e.absolute || e.type === "deviceorientationabsolute")) h = norm(360 - e.alpha);
+  if (h == null) return;
+  rotta = rotta == null ? h : norm(rotta + diff(h, rotta) * 0.25);   // filtro: niente tremolio
+  disegnaStato();
+}
+function suPosizione(p) {
+  pos = { lat: p.coords.latitude, lon: p.coords.longitude };
+  precisione = p.coords.accuracy;
+  errore = "";
+  if (!caricatoDa || distanza(caricatoDa, pos) > 300) caricaLuoghi();
+  else if (distanza(caricatoDa, pos) > 100) filtra();
+  disegnaStato();
+}
+async function avvia() {
+  try {
+    if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function") await DeviceOrientationEvent.requestPermission();
+  } catch (e) {}
+  avviato = true;
+  try { localStorage.setItem("visore-avviato", "1"); } catch (e) {}
+  if (DEMO) { avviaDemo(); disegnaStato(); return; }
+  const ev = "ondeviceorientationabsolute" in window ? "deviceorientationabsolute" : "deviceorientation";
+  window.addEventListener(ev, suOrientamento);
+  if (navigator.geolocation) {
+    idPosizione = navigator.geolocation.watchPosition(suPosizione,
+      e => { errore = e.code === 1 ? "POSIZIONE NEGATA<br><span style='color:var(--tenue)'>serve il GPS del telefono</span>" : "POSIZIONE NON DISPONIBILE"; disegnaStato(); },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
+  } else errore = "POSIZIONE NON SUPPORTATA";
+  disegnaStato();
+}
+function avviaDemo() {   // prova nel browser: Galatina (o ?demo&lat=…&lon=…), testa che ruota piano. Mai dati veri.
+  $("app").insertAdjacentHTML("beforeend", `<div id="demo">DEMO</div>`);
+  const q = new URLSearchParams(location.search);
+  suPosizione({ coords: { latitude: +(q.get("lat") || 40.1745), longitude: +(q.get("lon") || 18.1695), accuracy: 10 } });
+  const t0 = performance.now();
+  setInterval(() => { rotta = norm(20 + 70 * Math.sin((performance.now() - t0) / 9000)); disegnaStato(); }, 100);
+}
+
+// ── Luoghi da OpenStreetMap ───────────────────────────────────────
+// I paesi già pronti stanno nel sito (luoghi/indice.json: Galatina, Galatone…), istantanei e senza server esterni.
+// Arrivando in un paese nuovo, Visore scarica una volta i suoi luoghi (3 km) e li tiene sugli occhiali; «+ PAESE» lo rifà a mano.
+const RAGGIO_PAESE = 3000;
+let indice = null;
+const pacchiCaricati = {};
+const leggiLocali = () => { try { return JSON.parse(localStorage.getItem("visore-paesi") || "[]"); } catch (e) { return []; } };
+const centro = p => ({ lat: p.centro[0], lon: p.centro[1] });
+const copre = p => distanza(centro(p), pos) < p.raggio - 400;
+
+function compatta(el) {
+  const t = el.tags || {};
+  const lat = el.lat ?? (el.center && el.center.lat), lon = el.lon ?? (el.center && el.center.lon);
+  if (lat == null || !t.name) return null;
+  const k = t.amenity || t.shop || t.tourism || t.leisure || t.office || t.craft || "";
+  const gruppo = "amenity" in t ? "amenity" : "shop" in t ? "shop" : "altro";
+  return [el.type[0] + el.id, t.name, +lat.toFixed(6), +lon.toFixed(6), TIPI[k] || "", gruppo + "=" + k];
+}
+
+// Il pacco che copre la posizione: prima quelli scaricati sugli occhiali (più recenti), poi quelli del sito.
+async function paccoQui() {
+  const locale = leggiLocali().filter(copre).sort((a, b) => distanza(centro(a), pos) - distanza(centro(b), pos))[0];
+  if (locale) return locale;
+  if (indice === null) indice = await fetch("luoghi/indice.json").then(r => r.ok ? r.json() : []).catch(() => []);
+  const voce = indice.filter(copre).sort((a, b) => distanza(centro(a), pos) - distanza(centro(b), pos))[0];
+  if (!voce) return null;
+  if (!pacchiCaricati[voce.file]) pacchiCaricati[voce.file] = await fetch("luoghi/" + voce.file).then(r => r.ok ? r.json() : null).catch(() => null);
+  return pacchiCaricati[voce.file];
+}
+
+async function nomePaese() {
+  try {
+    const r = await fetch(`https://photon.komoot.io/reverse?lat=${pos.lat}&lon=${pos.lon}`);
+    const p = ((await r.json()).features || [])[0]?.properties || {};
+    return p.city || p.town || p.village || p.county || "questa zona";
+  } catch (e) { return "questa zona"; }
+}
+
+async function scaricaPaese() {
+  const qui = { ...pos };
+  const q = `[out:json][timeout:60];nwr(around:${RAGGIO_PAESE},${qui.lat.toFixed(5)},${qui.lon.toFixed(5)})[name][~"^(amenity|shop|tourism|leisure|office|craft)$"~"."];out center;`;
+  for (let giro = 0; giro < 2; giro++) {
+    for (const server of OVERPASS) {
+      const ferma = new AbortController(), t = setTimeout(() => ferma.abort(), 60000);
+      try {
+        const r = await fetch(server, { method: "POST", body: "data=" + encodeURIComponent(q), signal: ferma.signal,
+          headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+        if (!r.ok) continue;
+        const elementi = (await r.json()).elements || [];
+        const pacco = { nome: await nomePaese(), centro: [qui.lat, qui.lon], raggio: RAGGIO_PAESE, aggiornato: new Date().toISOString().slice(0, 10),
+          luoghi: elementi.map(compatta).filter(Boolean) };
+        // Al massimo 15 paesi sugli occhiali: si toglie il più vecchio e quelli che il nuovo copre già.
+        const altri = leggiLocali().filter(p => distanza(centro(p), qui) > 1000).slice(-14);
+        try { localStorage.setItem("visore-paesi", JSON.stringify([...altri, pacco])); } catch (e) {}
+        return pacco;
+      } catch (e) {} finally { clearTimeout(t); }
+    }
+  }
+  return null;
+}
+
+let notizia = "", notiziaTimer = 0;
+function annuncia(t) { notizia = t; clearTimeout(notiziaTimer); notiziaTimer = setTimeout(() => { notizia = ""; disegnaStato(); }, 5000); disegnaStato(); }
+
+async function caricaLuoghi(forza = false) {
+  if (!pos || caricando) return;
+  caricando = true; disegnaStato();
+  let pacco = forza ? null : await paccoQui();
+  if (!pacco) {
+    annuncia(forza ? "AGGIORNO I LUOGHI DI QUESTO PAESE…" : "NUOVO PAESE · SCARICO I LUOGHI…");
+    pacco = await scaricaPaese();
+    if (pacco) annuncia(`${pacco.nome.toUpperCase()} AGGIUNTO · ${pacco.luoghi.length} LUOGHI`);
+    else {
+      caricando = false;
+      if (!luoghi.length) errore = "MAPPA NON RAGGIUNGIBILE<br><span style='color:var(--tenue)'>riprovo tra un minuto</span>";
+      disegnaStato();
+      setTimeout(caricaLuoghi, 60000);
+      return;
+    }
+  }
+  tuttiQui = pacco.luoghi.map(([id, nome, lat, lon, tipo, chiave]) => ({ id, nome, lat, lon, tipo, chiave }));
+  filtra();
+  caricatoDa = { ...pos };
+  caricando = false; errore = "";
+  disegnaStato();
+}
+let tuttiQui = [];
+function filtra() {   // la categoria filtra i luoghi già caricati, senza scaricare di nuovo
+  const c = CATEGORIE.find(x => x.id === categoria);
+  const raggio = c && c.m ? RAGGIO * 3 : RAGGIO;
+  luoghi = tuttiQui.filter(l => (!c || !c.m || c.m.test(l.chiave)) && distanza(pos, l) < raggio);
+}
+
+// ── Ricerca ───────────────────────────────────────────────────────
+function disegnaChip() {
+  $("chip").innerHTML = CATEGORIE.map(c => `<button data-c="${c.id}" class="${c.id === categoria ? "attiva" : ""}">${c.nome}</button>`).join("")
+    + `<button data-a="paese" title="Scarica i luoghi del paese in cui si trova">+ PAESE</button>`;
+}
+async function cerca(testo) {
+  testo = testo.trim();
+  if (!testo) return;
+  apriRisultati(`<p>RICERCA DI «${esc(testo)}»…</p>`);
+  const t = testo.toLowerCase();
+  let trovati = tuttiQui.filter(l => l.nome.toLowerCase().includes(t));
+  try {
+    const u = new URL(PHOTON);
+    u.searchParams.set("q", testo); u.searchParams.set("limit", "8");
+    if (pos) { u.searchParams.set("lat", pos.lat); u.searchParams.set("lon", pos.lon); }
+    const r = await fetch(u);
+    const j = await r.json();
+    for (const f of j.features || []) {
+      const p = f.properties || {}, [lon, lat] = f.geometry.coordinates;
+      const nome = p.name || [p.street, p.housenumber].filter(Boolean).join(" ");
+      if (!nome) continue;
+      const id = (p.osm_type || "x").toLowerCase()[0] + (p.osm_id || lat + "," + lon);
+      if (trovati.some(x => x.id === id)) continue;
+      trovati.push({ id, nome, lat, lon, tipo: [p.city || p.town || p.village].filter(Boolean).join("") });
+    }
+  } catch (e) {}
+  if (pos) trovati.sort((a, b) => distanza(pos, a) - distanza(pos, b));
+  risultati = trovati.slice(0, 10);
+  if (!risultati.length) { apriRisultati(`<p>NESSUN RISULTATO PER «${esc(testo)}»</p>`); return; }
+  apriRisultati(risultati.map((l, i) => {
+    const d = pos ? distanza(pos, l) : null;
+    const freccia = pos && rotta != null ? "↑↗→↘↓↙←↖"[Math.round(norm(diff(direzione(pos, l), rotta)) / 45) % 8] + " " : "";
+    return `<button data-r="${i}"><b>${esc(l.nome)}</b><em>${freccia}${d == null ? "" : metri(d)}${l.tipo ? " · " + esc(l.tipo) : ""}</em></button>`;
+  }).join(""));
+  $("risultati").querySelector("button").focus();
+}
+function apriRisultati(h) { const r = $("risultati"); r.innerHTML = h; r.classList.add("aperto"); }
+function chiudiRisultati() { $("risultati").classList.remove("aperto"); risultati = []; }
+
+function impostaObiettivo(l) {
+  obiettivo = obiettivo && obiettivo.id === l.id ? null : { id: l.id, nome: l.nome, lat: l.lat, lon: l.lon, tipo: l.tipo };
+  try { localStorage.setItem("visore-obiettivo", obiettivo ? JSON.stringify(obiettivo) : ""); } catch (e) {}
+  disegnaObiettivo();
+}
+
+// ── Gesti e clic ──────────────────────────────────────────────────
+$("cerca").addEventListener("submit", e => { e.preventDefault(); cerca($("q").value); $("q").blur(); });
+$("chip").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.a === "paese") { if (pos) caricaLuoghi(true); return; }
+  categoria = categoria === b.dataset.c ? "" : b.dataset.c;
+  disegnaChip(); if (pos) filtra();
+  $("chip").querySelector(`[data-c="${categoria}"]`).focus();
+});
+$("campo").addEventListener("click", e => {
+  const b = e.target.closest(".mk"); if (!b) return;
+  const l = luoghi.find(x => x.id === b.dataset.id) || (obiettivo && obiettivo.id === b.dataset.id ? obiettivo : null);
+  if (l) impostaObiettivo(l);
+});
+$("risultati").addEventListener("click", e => {
+  const b = e.target.closest("button[data-r]"); if (!b) return;
+  impostaObiettivo(risultati[+b.dataset.r]);
+  chiudiRisultati();
+});
+
+function marcatoriInOrdine() { return [...document.querySelectorAll("#campo .mk")].sort((a, b) => a.offsetLeft - b.offsetLeft); }
+document.addEventListener("keydown", e => {
+  const a = document.activeElement;
+  const inQ = a === $("q"), inChip = a && a.parentElement === $("chip"), inRis = a && a.closest && a.closest("#risultati"), inMk = a && a.classList && a.classList.contains("mk");
+  if (e.key === "Escape" || (e.key === "Backspace" && !inQ)) {
+    if ($("risultati").classList.contains("aperto")) { e.preventDefault(); chiudiRisultati(); $("q").focus(); return; }
+    if (inQ || inChip) { e.preventDefault(); a.blur(); const m = marcatoriInOrdine(); if (m.length) m[Math.floor(m.length / 2)].focus(); return; }
+    history.back(); return;
+  }
+  if (inQ) return;   // nel campo di ricerca i tasti servono a scrivere
+  if (inRis && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+    e.preventDefault();
+    const bs = [...$("risultati").querySelectorAll("button")], i = bs.indexOf(a) + (e.key === "ArrowDown" ? 1 : -1);
+    if (i < 0) $("q").focus(); else if (bs[i]) { bs[i].focus(); bs[i].scrollIntoView({ block: "nearest" }); }
+    return;
+  }
+  if (inChip && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    e.preventDefault();
+    const bs = [...$("chip").children], i = bs.indexOf(a) + (e.key === "ArrowRight" ? 1 : -1);
+    if (bs[i]) bs[i].focus();
+    return;
+  }
+  if (e.key === "ArrowUp") { e.preventDefault(); inChip ? $("q").focus() : ($("chip").querySelector(".attiva") || $("chip").firstChild).focus(); return; }
+  if (e.key === "ArrowDown" && (inChip || !inMk)) { e.preventDefault(); const m = marcatoriInOrdine(); if (m.length) m[Math.floor(m.length / 2)].focus(); return; }
+  if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && avviato) {
+    const m = marcatoriInOrdine(); if (!m.length) return;
+    e.preventDefault();
+    const i = inMk ? m.indexOf(a) + (e.key === "ArrowRight" ? 1 : -1) : Math.floor(m.length / 2);
+    if (m[i]) m[i].focus();
+  }
+});
+
+// WebMCP: «Hey Meta, portami alla farmacia più vicina» con l'app aperta.
+function registraStrumenti() {
+  const mc = document.modelContext;
+  if (!mc || typeof mc.registerTool !== "function") return;
+  try {
+    mc.registerTool({
+      name: "imposta_obiettivo",
+      description: "Cerca un luogo (nome o categoria, es. farmacia, bar, via Roma) vicino alla posizione e lo imposta come obiettivo sul visore degli occhiali. Use for 'portami a', 'dov'è', 'trova', directions questions.",
+      inputSchema: { type: "object", properties: { luogo: { type: "string", description: "nome del luogo o categoria" } }, required: ["luogo"] },
+      execute: async (input) => {
+        const q = String((input && input.luogo) || "").trim();
+        if (!q) return "Mi dica quale luogo, Signore.";
+        $("q").value = q;
+        await cerca(q);
+        if (!risultati.length) return `Nessun luogo trovato per ${q}.`;
+        const l = risultati[0];
+        impostaObiettivo(l); chiudiRisultati();
+        return pos ? `${l.nome}, a ${metri(distanza(pos, l))}${piedi(distanza(pos, l)) ? ", circa " + piedi(distanza(pos, l)) + " a piedi" : ""}. Obiettivo impostato.` : `${l.nome}: obiettivo impostato.`;
+      },
+    });
+  } catch (e) {}
+}
+
+// ── Avvio ─────────────────────────────────────────────────────────
+try { const o = localStorage.getItem("visore-obiettivo"); if (o) obiettivo = JSON.parse(o); } catch (e) {}
+const K = (() => { try { return localStorage.getItem("lente-k") || ""; } catch (e) { return ""; } })();
+setInterval(() => { $("ora").textContent = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }); }, 15000);
+$("ora").textContent = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+disegnaChip();
+disegnaStato();
+registraStrumenti();
+requestAnimationFrame(ciclo);
+// Riaperture: se il permesso c'è già, si riparte da soli (senza chiedere di nuovo).
+if (DEMO) avvia();
+else if ((() => { try { return localStorage.getItem("visore-avviato") === "1"; } catch (e) { return false; } })()) {
+  if (!(window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function")) avvia();
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden && pos && caricatoDa && distanza(caricatoDa, pos) > 300) caricaLuoghi(); });
+JarvisSaluto({ app: "visore", chiave: K, url: URL_DATI, sotto: "BUSSOLA E POSIZIONE · ALLINEAMENTO", frasi: [
+  { audio: "visore-1", scritta: "Visore attivo, Signore. Il mondo, ora, con le didascalie." },
+  { audio: "visore-2", scritta: "Navigazione pronta. Perdersi, da oggi, richiede impegno." },
+  { audio: "visore-3", scritta: "Sistemi di puntamento online. Soprattutto per il bar, temo." },
+] });
+</script>
+</body>
+</html>
