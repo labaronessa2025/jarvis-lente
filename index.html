@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>Jarvis</title>
+<link rel="icon" type="image/png" href="icona.png">
+<style>
+  /* HUD per lente additiva: il nero è trasparente, il ciano «brilla». Viewport fisso 600×600, niente scorrimento.
+     Animazioni solo con transform/opacity e lente: il pannello va a 30 Hz e la CPU è modesta. */
+  :root {
+    --ciano:#3fd4ff; --ciano-t:#3fd4ff55; --ciano-f:#3fd4ff22; --testo:#e8f7ff; --tenue:#8fb3c4;
+    --critico:#ff5a4e; --importante:#ffb340; --secondario:#5ef0a8;
+    --mono:"SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    --sans:"SF Pro Display", -apple-system, "Roboto", "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; color:var(--testo);
+    font:20px/1.3 var(--sans); touch-action:none; }
+  #app { position:relative; display:flex; flex-direction:column; height:100%; padding:18px 22px 14px; }
+
+  /* cornice HUD: angoli a staffa sull'intero campo visivo */
+  #app::before, #app::after { content:""; position:absolute; width:34px; height:34px; border:2px solid var(--ciano); opacity:.7; }
+  #app::before { top:6px; left:6px; border-right:0; border-bottom:0; }
+  #app::after { bottom:6px; right:6px; border-left:0; border-top:0; }
+
+  header { display:flex; align-items:center; gap:14px; margin-bottom:12px; }
+  .reattore { width:54px; height:54px; flex:none; }
+  .reattore .anello { transform-origin:50% 50%; animation:gira 12s linear infinite; }
+  .reattore .anello2 { transform-origin:50% 50%; animation:gira 20s linear infinite reverse; }
+  @keyframes gira { to { transform:rotate(360deg); } }
+  .marchio { flex:1; }
+  h1 { font:700 25px/1 var(--sans); letter-spacing:7px; color:var(--ciano); text-shadow:0 0 10px var(--ciano-t); }
+  .sotto { font:13px/1.6 var(--mono); letter-spacing:2px; color:var(--tenue); }
+  .sotto b { color:var(--secondario); font-weight:400; }
+  #ora { font:600 26px/1 var(--mono); color:var(--testo); text-align:right; }
+  #data { font:13px var(--mono); color:var(--tenue); letter-spacing:1px; text-align:right; }
+
+  nav { display:flex; gap:6px; margin-bottom:12px; }
+  nav button { flex:1; font:600 15px/1 var(--mono); letter-spacing:2px; color:var(--tenue); background:transparent;
+    border:1px solid var(--ciano-t); padding:8px 0; clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%); }
+  nav button.attiva { color:#00141c; background:var(--ciano); border-color:var(--ciano); }
+
+  main { flex:1; overflow:hidden; position:relative; }
+  .etichetta { font:12px/1 var(--mono); letter-spacing:3px; color:var(--ciano); opacity:.85; margin:2px 0 8px;
+    display:flex; align-items:center; gap:8px; }
+  .etichetta::after { content:""; flex:1; height:1px; background:linear-gradient(90deg,var(--ciano-t),transparent); }
+
+  .riga-alta { display:flex; gap:14px; align-items:center; margin-bottom:12px; }
+  .indicatore { position:relative; width:150px; height:150px; flex:none; }
+  .indicatore svg { position:absolute; inset:0; }
+  .indicatore .centro { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .indicatore .valore { font:700 27px/1 var(--mono); color:var(--testo); text-shadow:0 0 8px var(--ciano-t); }
+  .indicatore .nota { font:12px/1.4 var(--mono); color:var(--tenue); letter-spacing:1px; }
+  .dati { flex:1; display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .dato { border:1px solid var(--ciano-f); border-left:3px solid var(--ciano); padding:6px 10px; }
+  .dato .n { font:700 22px/1.1 var(--mono); }
+  .dato .l { font:11px/1.3 var(--mono); color:var(--tenue); letter-spacing:1px; }
+  .dato.rosso { border-left-color:var(--critico); } .dato.rosso .n { color:var(--critico); }
+
+  .voce { position:relative; padding:7px 12px 7px 14px; margin-bottom:7px; border:1px solid #ffffff12;
+    background:linear-gradient(90deg,#ffffff0a,transparent 70%); }
+  .voce::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--colore,var(--ciano)); box-shadow:0 0 8px var(--colore,var(--ciano)); }
+  .voce.sel { border-color:var(--ciano-t); background:linear-gradient(90deg,var(--ciano-f),transparent 80%); }
+  .voce.sel::after { content:"◂"; position:absolute; right:8px; top:6px; color:var(--ciano); font-size:16px; }
+  .CRITICO, .critico { --colore:var(--critico); } .IMPORTANTE, .importante { --colore:var(--importante); }
+  .SECONDARIO, .secondario, .normale { --colore:var(--secondario); }
+  .liv { font:700 12px/1.2 var(--mono); letter-spacing:3px; color:var(--colore); }
+  .testo { font-size:18px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .sel .testo { -webkit-line-clamp:5; }
+  .titolo { font:600 19px/1.25 var(--sans); padding-right:16px; }
+  .meta { font:12px/1.5 var(--mono); color:var(--tenue); letter-spacing:1px; }
+  .meta .scaduto { color:var(--critico); }
+  .prossima { font-size:16px; color:var(--testo); opacity:.85; margin-top:3px; }
+  .codice { color:var(--ciano); }
+
+  .barra { margin:9px 0; }
+  .barra .testa { display:flex; justify-content:space-between; font:14px var(--mono); letter-spacing:1px; color:var(--tenue); }
+  .barra .testa b { color:var(--testo); font-weight:700; font-size:18px; }
+  .traccia { height:8px; margin-top:4px; background:repeating-linear-gradient(90deg,var(--ciano-f) 0 6px,transparent 6px 8px); }
+  .riempi { height:100%; background:repeating-linear-gradient(90deg,var(--ciano) 0 6px,transparent 6px 8px); box-shadow:0 0 6px var(--ciano-t); }
+  .riempi.ambra { background:repeating-linear-gradient(90deg,var(--importante) 0 6px,transparent 6px 8px); }
+
+  footer { display:flex; justify-content:space-between; align-items:center; font:12px/1 var(--mono); letter-spacing:1px;
+    color:var(--tenue); margin-top:8px; padding-top:7px; border-top:1px solid var(--ciano-f); }
+  .led { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--secondario); box-shadow:0 0 6px var(--secondario); margin-right:6px; animation:pulsa 2s ease-in-out infinite; }
+  .led.spento { background:var(--critico); box-shadow:0 0 6px var(--critico); }
+  @keyframes pulsa { 50% { opacity:.35; } }
+  #avviso { font:16px/1.6 var(--mono); color:var(--ciano); letter-spacing:1px; padding:30px 4px; }
+
+  /* avvio: una linea di scansione attraversa il campo una volta sola */
+  #scansione { position:absolute; left:0; right:0; top:0; height:2px; background:var(--ciano); box-shadow:0 0 14px var(--ciano);
+    opacity:0; pointer-events:none; animation:scansiona 1.1s ease-out .1s 1; }
+  @keyframes scansiona { 0% { transform:translateY(0); opacity:.9; } 100% { transform:translateY(580px); opacity:0; } }
+  @media (prefers-reduced-motion:reduce) { .anello, .anello2, .led, #scansione { animation:none !important; } }
+  @media (max-width:420px) { html, body { font-size:17px; } #app { padding:12px; } .indicatore { width:120px; height:120px; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="scansione"></div>
+  <header>
+    <svg class="reattore" viewBox="0 0 54 54" aria-hidden="true">
+      <circle cx="27" cy="27" r="25" fill="none" stroke="#3fd4ff55" stroke-width="1"/>
+      <circle class="anello" cx="27" cy="27" r="21" fill="none" stroke="#3fd4ff" stroke-width="2.5" stroke-dasharray="10 5"/>
+      <circle class="anello2" cx="27" cy="27" r="15" fill="none" stroke="#3fd4ffaa" stroke-width="1.5" stroke-dasharray="3 4"/>
+      <circle cx="27" cy="27" r="8" fill="#3fd4ff33" stroke="#3fd4ff" stroke-width="2"/>
+      <circle cx="27" cy="27" r="3" fill="#e8f7ff"/>
+    </svg>
+    <div class="marchio"><h1>J.A.R.V.I.S.</h1><div class="sotto">SISTEMA <b>● ONLINE</b> · LA BARONESSA</div></div>
+    <div><div id="ora">--:--</div><div id="data"></div></div>
+  </header>
+  <nav id="schede">
+    <button data-i="0">01 OGGI</button><button data-i="1">02 TASK</button><button data-i="2">03 CASSA</button>
+  </nav>
+  <main id="contenuto"><p id="avviso">INIZIALIZZAZIONE…</p></main>
+  <footer><span id="stato"><span class="led spento"></span>LINK IN CORSO</span><span>◀▶ MODULI · ▲▼ VOCI · ● SYNC</span></footer>
+</div>
+<script>
+"use strict";
+const URL_DATI = "https://wbcszvjszruatmpigncd.supabase.co/functions/v1/jarvis-lente";
+const RIGHE_TASK = 4;
+const SCHEDE = 3;
+let dati = null, scheda = 0, sel = 0, errore = "", inLinea = false;
+
+// La chiave arriva una volta sola nell'indirizzo (#k=…): si salva sul dispositivo e si toglie dalla barra.
+function chiave() {
+  const m = location.hash.match(/k=([\w-]{20,})/);
+  if (m) {
+    try { localStorage.setItem("lente-k", m[1]); } catch (e) {}
+    history.replaceState(null, "", location.pathname);
+    return m[1];
+  }
+  try { return localStorage.getItem("lente-k") || ""; } catch (e) { return ""; }
+}
+const K = chiave();
+
+const euro = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const dataBreve = iso => iso ? iso.slice(8, 10) + "/" + iso.slice(5, 7) : "";
+const oggiIso = () => new Date().toLocaleDateString("sv-SE");
+const ora = d => d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+
+async function carica(signal) {
+  if (!K) { errore = "CHIAVE ASSENTE · riaprire l'indirizzo completo dall'app Meta AI"; disegna(); return; }
+  try {
+    const r = await fetch(URL_DATI, { headers: { "x-lente-key": K }, cache: "no-store", signal });
+    if (r.status === 401) throw new Error("chiave non valida");
+    if (!r.ok) throw new Error("errore " + r.status);
+    const j = await r.json();
+    dati = j.dati; errore = dati ? "" : "NESSUN DATO · in attesa del primo invio dal Mac"; inLinea = true;
+  } catch (e) {
+    if (e.name === "AbortError") throw e;
+    inLinea = false;
+    if (!dati) errore = "LINK ASSENTE · " + e.message;
+  }
+  disegna();
+}
+
+function media() {
+  const m = dati.cassa && dati.cassa.mese;
+  return m && m.giorni ? m.entrate / m.giorni : 0;
+}
+
+// Anello a tratti: quota dell'incasso di oggi sulla media giornaliera del mese.
+function anello(quota) {
+  const r = 62, c = 2 * Math.PI * r, q = Math.max(0, Math.min(quota, 1));
+  const colore = quota >= 1 ? "#5ef0a8" : quota >= .6 ? "#3fd4ff" : "#ffb340";
+  return `<svg viewBox="0 0 150 150"><circle cx="75" cy="75" r="72" fill="none" stroke="#3fd4ff33" stroke-width="1"/>`
+    + `<circle cx="75" cy="75" r="${r}" fill="none" stroke="#3fd4ff22" stroke-width="10" stroke-dasharray="4 3"/>`
+    + `<circle cx="75" cy="75" r="${r}" fill="none" stroke="${colore}" stroke-width="10" stroke-dasharray="${c * q} ${c}" transform="rotate(-90 75 75)" style="filter:drop-shadow(0 0 4px ${colore})"/>`
+    + `<circle cx="75" cy="75" r="48" fill="none" stroke="#3fd4ff55" stroke-width="1" stroke-dasharray="1 5"/></svg>`;
+}
+
+function disegnaOggi() {
+  const v = (dati.riepilogo && dati.riepilogo.voci) || [], c = dati.cassa, t = dati.task || [];
+  const m = media(), inc = c && c.oggi.registrata ? c.oggi.incasso : 0;
+  const scaduti = t.filter(x => x.scadenza && x.scadenza < oggiIso()).length;
+  sel = Math.max(0, Math.min(sel, v.length - 1));
+  let h = `<div class="riga-alta"><div class="indicatore">${anello(m ? inc / m : 0)}<div class="centro">`
+    + `<div class="nota">INCASSO</div><div class="valore">${c && c.oggi.registrata ? euro(inc) : "—"}</div>`
+    + `<div class="nota">${m && c.oggi.registrata ? Math.round(inc / m * 100) + "% MEDIA" : "NON REGISTRATO"}</div></div></div>`
+    + `<div class="dati"><div class="dato"><div class="n">${c ? euro(c.ieri.incasso) : "—"}</div><div class="l">IERI</div></div>`
+    + `<div class="dato"><div class="n">${m ? euro(m) : "—"}</div><div class="l">MEDIA/GIORNO</div></div>`
+    + `<div class="dato"><div class="n">${t.length}</div><div class="l">TASK APERTI</div></div>`
+    + `<div class="dato ${scaduti ? "rosso" : ""}"><div class="n">${scaduti}</div><div class="l">SCADUTI</div></div></div></div>`;
+  h += `<div class="etichetta">ANALISI PRIORITÀ${dati.riepilogo && dati.riepilogo.data ? " · " + dataBreve(dati.riepilogo.data) : ""}</div>`;
+  v.forEach((x, i) => h += `<div class="voce ${x.livello} ${i === sel ? "sel" : ""}"><div class="liv">▲ ${x.livello}</div><div class="testo">${esc(x.testo)}</div></div>`);
+  if (!v.length) h += `<p id="avviso">NESSUNA ANOMALIA REGISTRATA</p>`;
+  return h;
+}
+
+function disegnaTask() {
+  const t = dati.task || [];
+  if (!t.length) return `<p id="avviso">NESSUN TASK APERTO</p>`;
+  sel = Math.max(0, Math.min(sel, t.length - 1));
+  const inizio = Math.min(Math.max(0, sel - 1), Math.max(0, t.length - RIGHE_TASK));
+  let h = `<div class="etichetta">CODA OPERATIVA · ${sel + 1}/${t.length}</div>`;
+  t.slice(inizio, inizio + RIGHE_TASK).forEach((x, i) => {
+    const n = inizio + i, scad = x.scadenza && x.scadenza < oggiIso();
+    h += `<div class="voce ${esc(x.priorita)} ${n === sel ? "sel" : ""}"><div class="meta"><span class="codice">T-${String(n + 1).padStart(2, "0")}</span>`
+      + ` · ${esc(x.priorita).toUpperCase()} · ${esc(x.stato).toUpperCase()}${x.scadenza ? ` · <span class="${scad ? "scaduto" : ""}">${scad ? "SCADUTO " : ""}${dataBreve(x.scadenza)}</span>` : ""}</div>`
+      + `<div class="titolo">${esc(x.titolo)}</div>`
+      + (n === sel && x.prossima ? `<div class="prossima">› ${esc(x.prossima)}</div>` : "") + `</div>`;
+  });
+  return h;
+}
+
+function barra(nome, valore, massimo, ambra) {
+  const q = massimo ? Math.min(valore / massimo, 1) * 100 : 0;
+  return `<div class="barra"><div class="testa"><span>${nome}</span><b>${euro(valore)}</b></div>`
+    + `<div class="traccia"><div class="riempi ${ambra ? "ambra" : ""}" style="width:${q}%"></div></div></div>`;
+}
+
+function disegnaCassa() {
+  const c = dati.cassa;
+  if (!c) return `<p id="avviso">CASSA NON DISPONIBILE</p>`;
+  const m = media(), o = c.oggi, scala = Math.max(m, o.incasso, c.ieri.incasso, 1);
+  let h = `<div class="riga-alta"><div class="indicatore">${anello(m ? o.incasso / m : 0)}<div class="centro">`
+    + `<div class="nota">OGGI</div><div class="valore">${o.registrata ? euro(o.incasso) : "—"}</div>`
+    + `<div class="nota">${o.registrata ? (o.incasso >= m ? "▲ " : "▼ ") + euro(Math.abs(o.incasso - m)) : "NON REGISTRATO"}</div></div></div>`
+    + `<div class="dati"><div class="dato"><div class="n">${euro(c.mese.entrate)}</div><div class="l">ENTRATE MESE</div></div>`
+    + `<div class="dato"><div class="n">${c.mese.giorni}</div><div class="l">GIORNI REGISTRATI</div></div>`
+    + `<div class="dato ${o.uscite ? "rosso" : ""}"><div class="n">${euro(o.uscite)}</div><div class="l">USCITE OGGI</div></div>`
+    + `<div class="dato"><div class="n">${o.incasso ? Math.round(o.pos / o.incasso * 100) : 0}%</div><div class="l">QUOTA POS</div></div></div></div>`;
+  h += `<div class="etichetta">FLUSSI · SCALA ${euro(scala)}</div>`
+    + barra("CONTANTI OGGI", o.contanti, scala) + barra("POS OGGI", o.pos, scala)
+    + barra("IERI", c.ieri.incasso, scala, true) + barra("MEDIA GIORNO", m, scala, true);
+  return h;
+}
+
+function disegna() {
+  document.querySelectorAll("#schede button").forEach((b, i) => b.classList.toggle("attiva", i === scheda));
+  const adesso = new Date();
+  document.getElementById("ora").textContent = ora(adesso);
+  document.getElementById("data").textContent = adesso.toLocaleDateString("it-IT", { weekday: "short", day: "2-digit", month: "2-digit" }).toUpperCase();
+  const quando = dati && dati.generato ? ora(new Date(dati.generato)) : "--:--";
+  document.getElementById("stato").innerHTML = `<span class="led ${inLinea ? "" : "spento"}"></span>${inLinea ? "LINK ATTIVO" : "LINK ASSENTE"} · DATI ${quando}`;
+  const main = document.getElementById("contenuto");
+  if (errore || !dati) { main.innerHTML = `<p id="avviso">${esc(errore || "INIZIALIZZAZIONE…")}</p>`; return; }
+  main.innerHTML = [disegnaOggi, disegnaTask, disegnaCassa][scheda]();
+}
+
+// D-pad della Neural Band / touchpad: frecce, Invio, indietro.
+document.addEventListener("keydown", e => {
+  const n = scheda === 1 ? (dati && dati.task || []).length : scheda === 0 ? (dati && dati.riepilogo && dati.riepilogo.voci || []).length : 0;
+  switch (e.key) {
+    case "ArrowRight": scheda = (scheda + 1) % SCHEDE; sel = 0; break;
+    case "ArrowLeft": scheda = (scheda + SCHEDE - 1) % SCHEDE; sel = 0; break;
+    case "ArrowDown": if (!n) return; sel = Math.min(sel + 1, n - 1); break;
+    case "ArrowUp": if (!n) return; sel = Math.max(sel - 1, 0); break;
+    case "Enter": carica(); break;
+    case "Escape": case "Backspace": history.back(); return;   // schermata radice: si esce dall'app
+    default: return;
+  }
+  e.preventDefault();
+  disegna();
+});
+document.querySelectorAll("#schede button").forEach(b => b.addEventListener("click", () => { scheda = +b.dataset.i; sel = 0; disegna(); }));
+document.addEventListener("visibilitychange", () => { if (!document.hidden) carica(); });
+setInterval(carica, 5 * 60 * 1000);
+setInterval(disegna, 60 * 1000);   // orologio
+
+// WebMCP: domande a voce a Meta AI mentre l'app è aperta («Hey Meta, quanto abbiamo incassato oggi?»).
+function registraStrumenti() {
+  const mc = document.modelContext;
+  if (!mc || typeof mc.registerTool !== "function") return;
+  const pronti = async signal => { if (!dati) await carica(signal); return dati; };
+  const strumenti = [
+    { name: "jarvis_incasso", description: "Incasso del negozio La Baronessa: oggi, ieri e totale del mese (contanti e POS). Use for questions about today's takings, cash, sales or 'incasso'.",
+      execute: async (_i, o) => { const d = await pronti(o && o.signal); const c = d && d.cassa; if (!c) return "Cassa non disponibile.";
+        scheda = 2; disegna();
+        return c.oggi.registrata ? `Oggi ${euro(c.oggi.incasso)}: ${euro(c.oggi.contanti)} in contanti e ${euro(c.oggi.pos)} con POS.` : `La cassa di oggi non è ancora registrata. Ieri ${euro(c.ieri.incasso)}.`; } },
+    { name: "jarvis_priorita", description: "Riepilogo di Jarvis: cose critiche e importanti di oggi. Use for 'what's important today', 'priorità', 'cosa devo fare'.",
+      execute: async (_i, o) => { const d = await pronti(o && o.signal); const v = (d && d.riepilogo.voci) || [];
+        scheda = 0; sel = 0; disegna();
+        const crit = v.find(x => x.livello === "CRITICO"), imp = v.find(x => x.livello === "IMPORTANTE");
+        return [crit && "Critico: " + crit.testo.split(". ")[0], imp && "Importante: " + imp.testo.split(". ")[0]].filter(Boolean).join(". ") || "Nessun riepilogo recente."; } },
+    { name: "jarvis_task", description: "Primi task aperti di Raffaele con scadenza. Use for questions about tasks, to-dos, deadlines, 'task', 'scadenze'.",
+      execute: async (_i, o) => { const d = await pronti(o && o.signal); const t = (d && d.task) || [];
+        scheda = 1; sel = 0; disegna();
+        return t.length ? `${t.length} task aperti. Primi: ` + t.slice(0, 3).map(x => x.titolo).join("; ") + "." : "Nessun task aperto."; } },
+  ];
+  for (const s of strumenti) { try { mc.registerTool(Object.assign({ inputSchema: { type: "object", properties: {} } }, s)); } catch (e) {} }
+}
+
+registraStrumenti();
+disegna();
+carica();
+</script>
+</body>
+</html>
