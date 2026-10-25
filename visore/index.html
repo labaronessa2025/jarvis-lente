@@ -25,7 +25,7 @@
     border:1px solid var(--ciano-t); border-radius:23px; background:#000; }
   #cerca:focus-within { border-color:var(--ciano); box-shadow:0 0 10px var(--ciano-f); }
   #cerca svg { flex:none; }
-  #q { flex:1; min-width:0; height:100%; background:transparent; border:0; color:var(--testo); font:18px var(--sans); }
+  #q { flex:1; min-width:0; height:100%; background:transparent; border:0; color:var(--testo); font:20px var(--sans); }
   #q::placeholder { color:var(--tenue); }
   #ora { font:600 16px var(--mono); color:var(--tenue); }
   #chip { position:absolute; left:22px; right:22px; top:70px; display:flex; gap:6px; }
@@ -37,28 +37,28 @@
   /* Campo dei marcatori: ±45° intorno alla direzione dello sguardo */
   #campo { position:absolute; left:0; right:0; top:100px; height:380px; }
   .mk { position:absolute; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; padding:4px 8px; border-radius:8px;
-    white-space:nowrap; text-shadow:0 0 6px var(--ciano-t); border:1px solid transparent; max-width:200px; }
-  .mk b { font:600 16px/1.2 var(--sans); color:var(--ciano); overflow:hidden; text-overflow:ellipsis; max-width:184px; }
-  .mk span { font:13px/1.3 var(--mono); color:var(--tenue); }
-  .mk i { width:12px; height:12px; margin-top:4px; border:2px solid var(--ciano); transform:rotate(45deg); box-shadow:0 0 6px var(--ciano-t); }
+    white-space:nowrap; text-shadow:0 0 6px var(--ciano-t); border:1px solid transparent; max-width:262px; }
+  .mk b { font:700 23px/1.15 var(--sans); color:var(--ciano); overflow:hidden; text-overflow:ellipsis; max-width:246px; }
+  .mk span { font:600 18px/1.3 var(--mono); color:var(--testo); }
+  .mk i { width:14px; height:14px; margin-top:4px; border:2px solid var(--ciano); transform:rotate(45deg); box-shadow:0 0 6px var(--ciano-t); }
   .mk:focus { border-color:var(--ciano); background:#00141c; box-shadow:0 0 10px var(--ciano-t); }
   .mk.obiettivo b, .mk.obiettivo span { color:var(--verde); text-shadow:0 0 8px #5ef0a855; }
   .mk.obiettivo i { border-color:var(--verde); background:var(--verde); box-shadow:0 0 10px var(--verde); }
-  .bordo { position:absolute; top:150px; font:600 15px/1.3 var(--mono); color:var(--verde); text-align:center; text-shadow:0 0 8px #5ef0a855; }
+  .bordo { position:absolute; top:150px; font:700 19px/1.3 var(--mono); color:var(--verde); text-align:center; text-shadow:0 0 8px #5ef0a855; }
   .bordo big { display:block; font-size:38px; line-height:1; }
   #bordo-sx { left:14px; } #bordo-dx { right:14px; }
 
   /* Bussola in basso: scorre quando si gira la testa */
-  #obiettivo { position:absolute; left:22px; right:22px; bottom:112px; text-align:center; font:600 15px/1.3 var(--mono); letter-spacing:1px; color:var(--verde); }
+  #obiettivo { position:absolute; left:22px; right:22px; bottom:116px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font:700 18px/1.3 var(--mono); letter-spacing:1px; color:var(--verde); }
   #bussola { position:absolute; left:22px; right:22px; bottom:20px; height:56px; overflow:hidden; border-top:1px solid var(--ciano-t);
     -webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent); mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent); }
   #scala { position:absolute; left:0; top:0; height:100%; will-change:transform; }
   .tk { position:absolute; top:0; width:1px; height:8px; background:var(--ciano); }
   .tk.l { height:14px; }
-  .cd { position:absolute; top:18px; transform:translateX(-50%); font:600 16px/1 var(--mono); color:var(--ciano); }
+  .cd { position:absolute; top:17px; transform:translateX(-50%); font:700 20px/1 var(--mono); color:var(--ciano); }
   .cd.n { color:var(--rosso); }
   .og { position:absolute; top:2px; width:10px; height:10px; transform:translateX(-50%) rotate(45deg); background:var(--verde); box-shadow:0 0 8px var(--verde); }
-  #puntatore { position:absolute; left:50%; bottom:74px; transform:translateX(-50%); font:600 13px/1 var(--mono); color:var(--testo); text-align:center; }
+  #puntatore { position:absolute; left:50%; bottom:74px; transform:translateX(-50%); font:700 17px/1 var(--mono); color:var(--testo); text-align:center; }
   #puntatore::after { content:""; display:block; margin:3px auto 0; width:0; height:0; border:7px solid transparent; border-bottom:0; border-top:9px solid var(--testo); }
 
   /* Risultati della ricerca */
@@ -66,11 +66,11 @@
     padding:8px; overflow-y:auto; display:none; }
   #risultati.aperto { display:block; }
   #risultati button { display:flex; width:100%; align-items:baseline; gap:10px; text-align:left; padding:9px 12px; margin-bottom:4px; border:1px solid #ffffff12; border-radius:8px; }
-  #risultati b { flex:1; font:600 17px/1.25 var(--sans); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  #risultati em { font:normal 13px var(--mono); color:var(--tenue); }
+  #risultati b { flex:1; font:700 21px/1.25 var(--sans); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #risultati em { font:600 16px var(--mono); color:var(--testo); }
   #risultati p { font:15px/1.5 var(--mono); color:var(--tenue); padding:14px 8px; }
 
-  #stato { position:absolute; left:0; right:0; top:230px; text-align:center; font:15px/1.6 var(--mono); letter-spacing:1px; color:var(--ciano); padding:0 40px; }
+  #stato { position:absolute; left:0; right:0; top:230px; text-align:center; font:600 18px/1.6 var(--mono); letter-spacing:1px; color:var(--ciano); padding:0 40px; }
   #avvia { display:block; margin:16px auto 0; padding:10px 26px; border:1px solid var(--ciano); border-radius:22px; font:600 15px var(--mono); letter-spacing:2px; color:var(--ciano); }
   #avvia:focus { background:var(--ciano); color:#00141c; }
   #osm { position:absolute; left:26px; top:104px; font:10px var(--mono); color:#8fb3c488; letter-spacing:1px; }
@@ -106,7 +106,7 @@ const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.k
 const PHOTON = "https://photon.komoot.io/api/";
 const CAMPO = 90;            // gradi visibili sulla larghezza della lente (±45°)
 const RAGGIO = 600;          // metri dei luoghi intorno
-const MAX_MK = 7;            // marcatori a schermo, i più vicini
+const MAX_MK = 5;            // marcatori a schermo, i più vicini (pochi e grandi: si leggono sulla lente)
 const DEMO = /[?&]demo\b/.test(location.search);
 
 const CATEGORIE = [
@@ -197,12 +197,12 @@ function disegnaMarcatori() {
   // Più vicino = più in basso; le etichette che si sovrappongono salgono.
   const posti = [];
   const html = scelti.map(v => {
-    const x = Math.max(100, Math.min(500, 300 + v.rel / (CAMPO / 2) * 260));   // etichette mai tagliate dal bordo
+    const x = Math.max(140, Math.min(460, 300 + v.rel / (CAMPO / 2) * 260));   // etichette mai tagliate dal bordo
     let y = 300 - Math.min(1, Math.log10(Math.max(v.d, 10) / 10) / Math.log10(RAGGIO * 3 / 10)) * 260;
     for (let giro = 0; giro < 8; giro++) {
-      const urta = posti.find(p => Math.abs(p.x - x) < 150 && Math.abs(p.y - y) < 54);
+      const urta = posti.find(p => Math.abs(p.x - x) < 230 && Math.abs(p.y - y) < 72);
       if (!urta) break;
-      y = urta.y - 56;
+      y = urta.y - 74;
     }
     if (y < 0) { if (!v.eObiettivo) return ""; y = 0; }   // niente spazio: il marcatore lontano si salta, l'obiettivo mai
     posti.push({ x, y });
@@ -223,7 +223,7 @@ function disegnaObiettivo() {
   const o = $("obiettivo");
   if (!obiettivo || !pos) { o.textContent = ""; return; }
   const d = distanza(pos, obiettivo);
-  o.textContent = d < 20 ? `◆ ARRIVATO · ${obiettivo.nome}` : `◆ OBIETTIVO · ${obiettivo.nome} · ${metri(d)}${piedi(d) ? " · " + piedi(d) + " a piedi" : ""}`;
+  o.textContent = d < 20 ? `◆ ARRIVATO · ${obiettivo.nome}` : `◆ ${obiettivo.nome} · ${metri(d)}${piedi(d) ? " · " + piedi(d) : ""}`;
 }
 
 function disegnaStato() {
