@@ -73,8 +73,6 @@
   #risultati p { font:15px/1.5 var(--mono); color:var(--tenue); padding:14px 8px; }
 
   #stato { position:absolute; left:0; right:0; top:230px; text-align:center; font:600 18px/1.6 var(--mono); letter-spacing:1px; color:var(--ciano); padding:0 40px; }
-  #avvia { display:block; margin:16px auto 0; padding:10px 26px; border:1px solid var(--ciano); border-radius:22px; font:600 15px var(--mono); letter-spacing:2px; color:var(--ciano); }
-  #avvia:focus { background:var(--ciano); color:#00141c; }
   #osm { position:absolute; left:26px; top:118px; font:10px var(--mono); color:#8fb3c488; letter-spacing:1px; }
   #demo { position:absolute; right:26px; top:118px; font:11px var(--mono); color:var(--ambra); letter-spacing:2px; }
 </style>
@@ -230,17 +228,11 @@ function disegnaObiettivo() {
 
 function disegnaStato() {
   const s = $("stato");
-  if (!avviato) {
-    s.innerHTML = `VISORE IN ATTESA<br><span style="color:var(--tenue)">bussola e posizione</span><button id="avvia">ATTIVA</button>`;
-    $("avvia").onclick = avvia;
-    if (!document.activeElement || document.activeElement === document.body) $("avvia").focus();
-    return;
-  }
   let t = "";
   if (notizia) t = notizia;
   else if (errore) t = errore;
   else if (!pos) t = "RICERCA POSIZIONE…";
-  else if (rotta == null) t = "BUSSOLA NON DISPONIBILE<br><span style='color:var(--tenue)'>muova la testa a otto</span>";
+  else if (rotta == null) t = "ATTIVAZIONE BUSSOLA…<br><span style='color:var(--tenue)'>se non parte, un gesto qualsiasi</span>";
   else if (caricando && !luoghi.length) t = "SCANSIONE DEI LUOGHI…";
   else if (!luoghi.length && !obiettivo) t = "NESSUN LUOGO INTORNO";
   s.innerHTML = t;
@@ -273,15 +265,35 @@ function suPosizione(p) {
   else if (distanza(caricatoDa, pos) > 100) filtra();
   disegnaStato();
 }
-async function avvia() {
+// Bussola e posizione partono da sole all'apertura. Se il sistema vuole il permesso con un gesto (requestPermission),
+// lo si chiede al primo gesto qualsiasi della Neural Band, senza pulsanti da cercare.
+let ascoltaOrientamento = false;
+function attaccaBussola() {
+  if (ascoltaOrientamento) return;
+  ascoltaOrientamento = true;
+  window.addEventListener("ondeviceorientationabsolute" in window ? "deviceorientationabsolute" : "deviceorientation", suOrientamento);
+}
+async function permessoBussola() {
   try {
-    if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function") await DeviceOrientationEvent.requestPermission();
-  } catch (e) {}
+    if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function"
+        && await DeviceOrientationEvent.requestPermission() !== "granted") return false;
+  } catch (e) { return false; }   // senza gesto la richiesta viene rifiutata: si riprova al primo gesto
+  return true;
+}
+function avvia() {
+  if (avviato) return;
   avviato = true;
-  try { localStorage.setItem("visore-avviato", "1"); } catch (e) {}
   if (DEMO) { avviaDemo(); disegnaStato(); return; }
-  const ev = "ondeviceorientationabsolute" in window ? "deviceorientationabsolute" : "deviceorientation";
-  window.addEventListener(ev, suOrientamento);
+  permessoBussola().then(ok => { if (ok) attaccaBussola(); });
+  attaccaBussola();   // se il permesso c'è già, i dati arrivano subito
+  const alPrimoGesto = () => {
+    if (rotta != null) return togli();
+    permessoBussola().then(ok => { if (ok) attaccaBussola(); });
+    togli();
+  };
+  const togli = () => { document.removeEventListener("keydown", alPrimoGesto, true); document.removeEventListener("click", alPrimoGesto, true); };
+  document.addEventListener("keydown", alPrimoGesto, true);
+  document.addEventListener("click", alPrimoGesto, true);
   if (navigator.geolocation) {
     idPosizione = navigator.geolocation.watchPosition(suPosizione,
       e => { errore = e.code === 1 ? "POSIZIONE NEGATA<br><span style='color:var(--tenue)'>serve il GPS del telefono</span>" : "POSIZIONE NON DISPONIBILE"; disegnaStato(); },
@@ -531,11 +543,7 @@ disegnaChip();
 disegnaStato();
 registraStrumenti();
 requestAnimationFrame(ciclo);
-// Riaperture: se il permesso c'è già, si riparte da soli (senza chiedere di nuovo).
-if (DEMO) avvia();
-else if ((() => { try { return localStorage.getItem("visore-avviato") === "1"; } catch (e) { return false; } })()) {
-  if (!(window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function")) avvia();
-}
+avvia();   // all'apertura, sempre
 document.addEventListener("visibilitychange", () => { if (!document.hidden && pos && caricatoDa && distanza(caricatoDa, pos) > 300) caricaLuoghi(); });
 JarvisSaluto({ app: "visore", chiave: K, url: URL_DATI, sotto: "BUSSOLA E POSIZIONE · ALLINEAMENTO", frasi: [
   { audio: "visore-1", scritta: "Visore attivo, Signore. Il mondo, ora, con le didascalie." },
