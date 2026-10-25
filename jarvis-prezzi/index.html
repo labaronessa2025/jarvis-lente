@@ -53,6 +53,7 @@
   #avviso { font:16px/1.6 var(--mono); color:var(--ciano); letter-spacing:1px; padding:30px 4px; }
   @media (max-width:420px) { html, body { font-size:17px; } #app { padding:12px; } }
 </style>
+<script src="../comune/saluto.js"></script>
 </head>
 <body>
 <div id="app">
@@ -173,6 +174,11 @@ function registraStrumenti() {
 registraStrumenti();
 disegna();
 carica();
+JarvisSaluto({ app: "prezzi", chiave: K, url: URL_DATI, sotto: "LISTINO FORNITORI · ANALISI IN CORSO", frasi: [
+  { audio: "prezzi-1", scritta: "I costi dei fornitori, Signore. Le bolle non mentono." },
+  { audio: "prezzi-2", scritta: "Nessun fornitore fa sconti a Iron Man, Signore." },
+  { audio: "prezzi-3", scritta: "Si sieda, Signore, prima di guardare i pomodori." },
+] });
 </script>
 </body>
 </html>
