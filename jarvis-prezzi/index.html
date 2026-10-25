@@ -31,14 +31,19 @@
   nav button { flex:1; font:600 14px/1 var(--mono); letter-spacing:2px; color:var(--tenue); background:transparent; border:1px solid var(--ciano-t);
     padding:8px 0; clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%); }
   nav button.attiva { color:#00141c; background:var(--ciano); border-color:var(--ciano); }
-  main { flex:1; overflow:hidden; }
+  main { flex:1; display:flex; flex-direction:column; min-height:0; }
+  #lista { flex:1; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:var(--ciano-t) transparent; padding-right:4px; }
+  #lista::-webkit-scrollbar { width:4px; } #lista::-webkit-scrollbar-thumb { background:var(--ciano-t); }
   .etichetta { font:12px/1 var(--mono); letter-spacing:3px; color:var(--ciano); opacity:.85; margin:2px 0 8px; display:flex; align-items:center; gap:8px; }
   .etichetta::after { content:""; flex:1; height:1px; background:linear-gradient(90deg,var(--ciano-t),transparent); }
-  .riga { position:relative; display:flex; align-items:baseline; gap:10px; padding:7px 12px 7px 14px; margin-bottom:6px; border:1px solid #ffffff12;
-    background:linear-gradient(90deg,#ffffff0a,transparent 70%); }
+  .riga { position:relative; display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 10px; width:100%; text-align:left; color:inherit; font:inherit;
+    padding:7px 12px 7px 14px; margin-bottom:6px; border:1px solid #ffffff12; background:linear-gradient(90deg,#ffffff0a,transparent 70%); }
+  .riga:focus { outline:none; }
+  .riga .dett { display:none; }
+  .riga.sel .dett { display:block; }
   .riga::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--colore,var(--ciano)); box-shadow:0 0 8px var(--colore,var(--ciano)); }
   .riga.su { --colore:var(--su); } .riga.giu { --colore:var(--giu); }
-  .riga.sel { border-color:var(--ciano-t); background:linear-gradient(90deg,var(--ciano-f),transparent 80%); flex-wrap:wrap; }
+  .riga.sel { border-color:var(--ciano); background:linear-gradient(90deg,var(--ciano-f),transparent 80%); box-shadow:0 0 8px var(--ciano-f); }
   .nome { flex:1; font:600 18px/1.25 var(--sans); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .nome::first-letter { text-transform:uppercase; }
   .sel .nome { white-space:normal; }
@@ -69,7 +74,6 @@
 <script>
 "use strict";
 const URL_DATI = "https://wbcszvjszruatmpigncd.supabase.co/functions/v1/jarvis-lente";
-const RIGHE = 5;
 let acquisti = [], generato = null, scheda = 0, sel = 0, errore = "", inLinea = false;
 
 // Stessa chiave di «Jarvis» (stesso sito): basta averla aperta una volta; altrimenti arriva nell'indirizzo (#k=…).
@@ -118,26 +122,47 @@ function disegna() {
   const v = elenco();
   if (!v.length) { main.innerHTML = `<p id="avviso">${scheda === 1 ? "NESSUNA VARIAZIONE DI COSTO" : "NESSUN COSTO REGISTRATO"}</p>`; return; }
   sel = Math.max(0, Math.min(sel, v.length - 1));
-  const inizio = Math.min(Math.max(0, sel - 2), Math.max(0, v.length - RIGHE));
-  let h = `<div class="etichetta">${scheda === 1 ? "COSTI VARIATI" : "ULTIMO COSTO PER PRODOTTO"} · ${sel + 1}/${v.length}</div>`;
-  v.slice(inizio, inizio + RIGHE).forEach((x, i) => {
-    const n = inizio + i, d = variazione(x), cls = d > 0 ? "su" : d < 0 ? "giu" : "";
-    h += `<div class="riga ${cls} ${n === sel ? "sel" : ""}"><span class="nome">${esc(x.prodotto)}</span>`
+  let h = `<div class="etichetta" id="conta"></div><div id="lista">`;
+  v.forEach((x, n) => {
+    const d = variazione(x), cls = d > 0 ? "su" : d < 0 ? "giu" : "";
+    h += `<button class="riga ${cls}" data-n="${n}"><span class="nome">${esc(x.prodotto)}</span>`
       + `<span class="costo">${euro(x.costo)}</span><span class="unita">/${esc(x.unita || "u")}</span>`
       + (d ? `<span class="var">${d > 0 ? "▲" : "▼"} ${euro(Math.abs(d))}</span>` : "")
-      + (n === sel ? `<div class="dett">${x.fornitore ? esc(x.fornitore) + " · " : ""}BOLLA DEL ${dataBreve(x.data)}`
-          + (x.precedente != null ? ` · PRIMA ${euro(x.precedente)} (${dataBreve(x.data_precedente)})` : "") + ` · COSTO COME LETTO DAL DOCUMENTO</div>` : "")
-      + `</div>`;
+      + `<span class="dett">${x.fornitore ? esc(x.fornitore) + " · " : ""}BOLLA DEL ${dataBreve(x.data)}`
+      + (x.precedente != null ? ` · PRIMA ${euro(x.precedente)} (${dataBreve(x.data_precedente)})` : "") + ` · COSTO COME LETTO DAL DOCUMENTO</span>`
+      + `</button>`;
   });
-  main.innerHTML = h;
+  main.innerHTML = h + `</div>`;
+  seleziona(sel);
 }
+
+// La riga selezionata è quella col fuoco: si espande e la lista la porta in vista.
+function seleziona(n) {
+  const righe = document.querySelectorAll("#lista .riga");
+  if (!righe.length) return;
+  sel = Math.max(0, Math.min(n, righe.length - 1));
+  righe.forEach((r, i) => r.classList.toggle("sel", i === sel));
+  const r = righe[sel];
+  if (document.activeElement !== r) r.focus({ preventScroll: true });
+  r.scrollIntoView({ block: "nearest" });
+  const conta = document.getElementById("conta");
+  if (conta) conta.textContent = `${scheda === 1 ? "COSTI VARIATI" : "ULTIMO COSTO PER PRODOTTO"} · ${sel + 1}/${righe.length}`;
+}
+document.addEventListener("focusin", e => {
+  const r = e.target.closest && e.target.closest("#lista .riga");
+  if (r && +r.dataset.n !== sel) seleziona(+r.dataset.n);
+});
 
 document.addEventListener("keydown", e => {
   const n = elenco().length;
   switch (e.key) {
     case "ArrowRight": case "ArrowLeft": scheda = 1 - scheda; sel = 0; break;
-    case "ArrowDown": if (!n) return; sel = Math.min(sel + 1, n - 1); break;
-    case "ArrowUp": if (!n) return; sel = Math.max(sel - 1, 0); break;
+    case "ArrowDown": case "ArrowUp":
+      // Un passo per gesto, sulla riga successiva o precedente; il passo del browser si annulla per non farne due.
+      if (!n) return;
+      e.preventDefault();
+      seleziona(sel + (e.key === "ArrowDown" ? 1 : -1));
+      return;
     case "Enter": carica(); break;
     case "Escape": case "Backspace": history.back(); return;
     default: return;
