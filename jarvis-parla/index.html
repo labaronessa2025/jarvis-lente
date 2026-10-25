@@ -38,7 +38,7 @@
     clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%); }
   #invia:focus { outline:2px solid var(--testo); }
   #ricevuto { font:13px/1.4 var(--mono); color:var(--verde); letter-spacing:1px; margin-top:6px; min-height:18px; }
-  #domanda:focus { outline:none; border-color:var(--ciano); box-shadow:0 0 10px var(--ciano-f) inset; }
+  #domanda:focus { outline:none; border:2px solid var(--ciano); box-shadow:0 0 14px var(--ciano-t), 0 0 10px var(--ciano-f) inset; }
   #stato { font:12px/1 var(--mono); letter-spacing:3px; color:var(--ciano); margin:12px 0 8px; display:flex; align-items:center; gap:8px; }
   #stato::after { content:""; flex:1; height:1px; background:linear-gradient(90deg,var(--ciano-t),transparent); }
   #stato.errore { color:var(--rosso); }
@@ -73,7 +73,7 @@
     <div id="ora">--:--</div>
   </header>
   <div class="riga-domanda">
-    <input id="domanda" type="text" autocomplete="off" placeholder="● Pizzica qui e parli, Signore" aria-label="Domanda per Jarvis">
+    <input id="domanda" type="text" autocomplete="off" placeholder="● Scorra qui e pizzichi per parlare" aria-label="Domanda per Jarvis">
     <button id="invia" type="button">INVIA ▶</button>
   </div>
   <div id="ricevuto"></div>
@@ -212,7 +212,7 @@ function testoArrivato(evento) {
 for (const ev of ["input", "change", "compositionend", "blur", "keyup"]) $("domanda").addEventListener(ev, () => testoArrivato(ev));
 setInterval(() => { if ($("domanda").value.trim() !== ultimoVisto) testoArrivato("lettura"); }, 500);
 $("domanda").addEventListener("keydown", e => { if (e.key === "Enter" && $("domanda").value.trim()) { e.preventDefault(); invia(); } });
-$("invia").addEventListener("click", () => { if ($("domanda").value.trim()) invia(); else { $("ricevuto").textContent = "CAMPO VUOTO: PIZZICHI IL CAMPO E DETTI"; $("domanda").focus(); } });
+$("invia").addEventListener("click", () => { if ($("domanda").value.trim()) invia(); else $("ricevuto").textContent = "CAMPO VUOTO: SCORRA SUL CAMPO, PIZZICHI E DETTI"; });
 $("ascolta").addEventListener("click", () => { if (ultimaVoce) { ultimaVoce.currentTime = 0; ultimaVoce.play().catch(() => {}); } });
 
 // Su e giù scorrono le risposte; il resto lo gestisce la navigazione degli occhiali.
@@ -243,7 +243,7 @@ function registraStrumenti() {
 orologio();
 setInterval(orologio, 60000);
 registraStrumenti();
-setTimeout(() => $("domanda").focus(), 300);
+// Niente fuoco automatico sul campo: la dettatura si apre solo se è il Signore a selezionarlo e a pizzicarlo.
 JarvisSaluto({ app: "parla", chiave: K, url: URL_DATI, sotto: "CANALE VOCALE APERTO", frasi: [
   { audio: "parla-1", scritta: "Sono tutto orecchie, Signore. In senso figurato." },
   { audio: "parla-2", scritta: "Mi dica, Signore. Prometto di non giudicare la domanda." },
