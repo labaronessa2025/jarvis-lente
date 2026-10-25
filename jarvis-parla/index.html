@@ -32,6 +32,12 @@
   #domanda { width:100%; font:600 20px/1.3 var(--sans); color:var(--testo); background:transparent; border:1px solid var(--ciano-t);
     padding:12px 16px; border-radius:0; clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px); }
   #domanda::placeholder { color:var(--ciano); opacity:.9; }
+  .riga-domanda { display:flex; gap:8px; align-items:stretch; }
+  .riga-domanda #domanda { flex:1; min-width:0; }
+  #invia { flex:none; font:700 15px/1 var(--mono); letter-spacing:2px; color:#00141c; background:var(--ciano); border:0; padding:0 14px;
+    clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%); }
+  #invia:focus { outline:2px solid var(--testo); }
+  #ricevuto { font:13px/1.4 var(--mono); color:var(--verde); letter-spacing:1px; margin-top:6px; min-height:18px; }
   #domanda:focus { outline:none; border-color:var(--ciano); box-shadow:0 0 10px var(--ciano-f) inset; }
   #stato { font:12px/1 var(--mono); letter-spacing:3px; color:var(--ciano); margin:12px 0 8px; display:flex; align-items:center; gap:8px; }
   #stato::after { content:""; flex:1; height:1px; background:linear-gradient(90deg,var(--ciano-t),transparent); }
@@ -66,7 +72,11 @@
     <div class="marchio"><h1>J.A.R.V.I.S.</h1><div class="sotto">PARLA · SOLA LETTURA</div></div>
     <div id="ora">--:--</div>
   </header>
-  <input id="domanda" type="text" autocomplete="off" placeholder="● Pizzica qui e parli, Signore" aria-label="Domanda per Jarvis">
+  <div class="riga-domanda">
+    <input id="domanda" type="text" autocomplete="off" placeholder="● Pizzica qui e parli, Signore" aria-label="Domanda per Jarvis">
+    <button id="invia" type="button">INVIA ▶</button>
+  </div>
+  <div id="ricevuto"></div>
   <div id="stato">IN ASCOLTO</div>
   <div id="conv"></div>
   <button id="ascolta" type="button">▶ ASCOLTA LA RISPOSTA</button>
@@ -177,19 +187,32 @@ async function preparaVoce(id) {
   }
 }
 
-// La dettatura del sistema consegna il testo con «change» (a volte solo con «input»): si manda una volta sola.
+// La dettatura degli occhiali consegna il testo nel campo: con «change», «input», a volte senza alcun evento.
+// Per non perderlo: si ascoltano tutti gli eventi, si controlla comunque il campo due volte al secondo, si mostra
+// cosa è arrivato e si invia dopo un secondo di silenzio; c'è anche il pulsante INVIA.
 function invia() {
   const campo = $("domanda"), t = campo.value.trim();
-  if (!t || t === ultimoInviato) return;
+  if (!t || t === ultimoInviato || occupato) return;
   ultimoInviato = t;
   campo.value = "";
+  $("ricevuto").textContent = "";
   campo.blur();
   chiedi(t);
 }
-let attesaInput = null;
-$("domanda").addEventListener("change", invia);
-$("domanda").addEventListener("input", () => { clearTimeout(attesaInput); attesaInput = setTimeout(invia, 1500); });
+let attesaInput = null, ultimoVisto = "";
+function testoArrivato(evento) {
+  $("nota").textContent = "EVENTO: " + evento.toUpperCase();
+  const t = $("domanda").value.trim();
+  if (t === ultimoVisto) return;
+  ultimoVisto = t;
+  $("ricevuto").textContent = t ? "RICEVUTO: " + t : "";
+  clearTimeout(attesaInput);
+  if (t) attesaInput = setTimeout(invia, 1000);
+}
+for (const ev of ["input", "change", "compositionend", "blur", "keyup"]) $("domanda").addEventListener(ev, () => testoArrivato(ev));
+setInterval(() => { if ($("domanda").value.trim() !== ultimoVisto) testoArrivato("lettura"); }, 500);
 $("domanda").addEventListener("keydown", e => { if (e.key === "Enter" && $("domanda").value.trim()) { e.preventDefault(); invia(); } });
+$("invia").addEventListener("click", () => { if ($("domanda").value.trim()) invia(); else { $("ricevuto").textContent = "CAMPO VUOTO: PIZZICHI IL CAMPO E DETTI"; $("domanda").focus(); } });
 $("ascolta").addEventListener("click", () => { if (ultimaVoce) { ultimaVoce.currentTime = 0; ultimaVoce.play().catch(() => {}); } });
 
 // Su e giù scorrono le risposte; il resto lo gestisce la navigazione degli occhiali.
