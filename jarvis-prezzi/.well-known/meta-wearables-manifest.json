@@ -3,9 +3,9 @@
   "name": "Prezzi",
   "description": "Costi d'acquisto dalle bolle dei fornitori di La Baronessa.",
   "appearance": {
-    "theme_color": "#FFB340",
+    "theme_color": "#3FD4FF",
     "icon": {
-      "src": "../icona.svg"
+      "src": "../../icona.svg"
     }
   }
 }
