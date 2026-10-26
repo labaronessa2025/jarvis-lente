@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>SPX500</title>
+<style>
+  /* Stesso HUD delle altre web app di Jarvis: nero (trasparente sulla lente), ciano, 600×600 senza scorrimento. */
+  :root {
+    --ciano:#3fd4ff; --ciano-t:#3fd4ff55; --ciano-f:#3fd4ff22; --testo:#e8f7ff; --tenue:#8fb3c4;
+    --su:#5ef0a8; --giu:#ff5a4e; --ambra:#ffb340;
+    --mono:"SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    --sans:"SF Pro Display", -apple-system, "Roboto", "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; color:var(--testo); font:20px/1.3 var(--sans); }
+  #app { position:relative; display:flex; flex-direction:column; height:100%; padding:18px 24px 16px; }
+  #app::before, #app::after { content:""; position:absolute; width:34px; height:34px; border:2px solid var(--ciano); opacity:.7; }
+  #app::before { top:6px; left:6px; border-right:0; border-bottom:0; }
+  #app::after { bottom:6px; right:6px; border-left:0; border-top:0; }
+  header { display:flex; align-items:baseline; gap:12px; }
+  h1 { flex:1; font:700 24px/1 var(--sans); letter-spacing:5px; color:var(--ciano); text-shadow:0 0 10px var(--ciano-t); }
+  h1 small { display:block; margin-top:6px; font:600 13px/1 var(--mono); letter-spacing:3px; color:var(--tenue); }
+  #ora { font:700 24px/1 var(--mono); }
+  #prezzo { margin-top:26px; font:700 92px/1 var(--mono); letter-spacing:-2px; text-shadow:0 0 18px var(--ciano-t); }
+  #variazione { margin-top:10px; font:700 30px/1 var(--mono); }
+  #variazione.su { color:var(--su); text-shadow:0 0 12px #5ef0a855; }
+  #variazione.giu { color:var(--giu); text-shadow:0 0 12px #ff5a4e55; }
+  #grafico { margin-top:22px; flex:1; min-height:0; position:relative; border-top:1px solid var(--ciano-f); border-bottom:1px solid var(--ciano-f); }
+  #grafico svg { position:absolute; inset:0; width:100%; height:100%; }
+  #scala { position:absolute; right:0; top:4px; font:600 14px var(--mono); color:var(--tenue); }
+  #scala-b { position:absolute; right:0; bottom:4px; font:600 14px var(--mono); color:var(--tenue); }
+  #finestra { position:absolute; left:0; bottom:4px; font:600 14px var(--mono); color:var(--tenue); letter-spacing:1px; }
+  #quote { display:flex; justify-content:space-between; margin-top:12px; font:600 20px var(--mono); color:var(--testo); }
+  #quote span b { color:var(--tenue); font-weight:600; margin-right:8px; }
+  #quote i { font-style:normal; }
+  footer { display:flex; justify-content:space-between; margin-top:10px; padding-top:8px; border-top:1px solid var(--ciano-f);
+    font:600 14px/1 var(--mono); letter-spacing:1px; color:var(--tenue); }
+  .led { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--su); box-shadow:0 0 6px var(--su); margin-right:7px; }
+  .led.fermo { background:var(--ambra); box-shadow:0 0 6px var(--ambra); }
+  .led.spento { background:var(--giu); box-shadow:0 0 6px var(--giu); }
+  #demo { color:var(--ambra); }
+</style>
+<script src="../comune/saluto.js"></script>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>SPX500<small>ETORO · TEMPO REALE · SOLA LETTURA</small></h1>
+    <div id="ora">--:--</div>
+  </header>
+  <div id="prezzo">—</div>
+  <div id="variazione">&nbsp;</div>
+  <div id="grafico"><svg viewBox="0 0 552 200" preserveAspectRatio="none" aria-hidden="true"><path id="area"/><path id="linea"/><line id="rif"/></svg>
+    <span id="scala"></span><span id="scala-b"></span><span id="finestra">ULTIMA ORA</span></div>
+  <div id="quote"><span><b>DENARO</b><i id="bid">—</i></span><span><b>LETTERA</b><i id="ask">—</i></span></div>
+  <footer><span id="stato"><span class="led spento"></span>COLLEGAMENTO…</span><span id="agg">--:--:--</span></footer>
+</div>
+<script>
+"use strict";
+// SPX500 su eToro, sulla lente. I numeri arrivano dalla funzione Supabase jarvis-etoro (le chiavi eToro restano lì);
+// la pagina li chiede ogni 3 s solo mentre è aperta. Nessun ordine, nessun dato del conto: solo il prezzo.
+const URL_PREZZO = "https://wbcszvjszruatmpigncd.supabase.co/functions/v1/jarvis-etoro";
+const URL_DATI = "https://wbcszvjszruatmpigncd.supabase.co/functions/v1/jarvis-lente";   // solo per la voce del saluto
+const PASSO_MS = 3000;
+const FINESTRA_MS = 60 * 60 * 1000;   // il grafico mostra l'ultima ora
+const DEMO = /[?&]demo\b/.test(location.search);
+const $ = id => document.getElementById(id);
+const K = (() => { try { return localStorage.getItem("lente-k") || ""; } catch (e) { return ""; } })();
+
+const num = (n, d = 2) => n == null || !isFinite(n) ? "—" : n.toLocaleString("it-IT", { minimumFractionDigits: d, maximumFractionDigits: d });
+const segno = n => (n > 0 ? "+" : n < 0 ? "−" : "") + num(Math.abs(n));
+
+// Storia dei prezzi per il grafico: tenuta sugli occhiali, così riaprendo l'app il grafico non riparte da zero.
+let storia = (() => { try { return JSON.parse(localStorage.getItem("spx-storia") || "[]"); } catch (e) { return []; } })();
+function aggiungi(t, p) {
+  storia.push([t, p]);
+  storia = storia.filter(x => t - x[0] < FINESTRA_MS);
+  try { localStorage.setItem("spx-storia", JSON.stringify(storia)); } catch (e) {}
+}
+
+let ultimo = null, inLinea = false, errore = "";
+async function aggiorna() {
+  try {
+    const d = DEMO ? demo() : await (async () => {
+      if (!K) throw new Error("chiave assente: aprire prima l'app Jarvis");
+      const r = await fetch(URL_PREZZO, { headers: { "x-lente-key": K }, cache: "no-store" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.errore || "errore " + r.status);
+      return j;
+    })();
+    ultimo = d; inLinea = true; errore = "";
+    aggiungi(Date.parse(d.data) || Date.now(), d.prezzo);
+  } catch (e) {
+    inLinea = false; errore = String(e.message || e).toUpperCase();
+  }
+  disegna();
+}
+
+function disegna() {
+  $("ora").textContent = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+  const d = ultimo;
+  if (d) {
+    $("prezzo").textContent = num(d.prezzo);
+    const v = $("variazione");
+    v.className = d.variazione > 0 ? "su" : d.variazione < 0 ? "giu" : "";
+    v.textContent = d.variazione == null ? "VARIAZIONE N/D" : `${d.variazione > 0 ? "▲" : d.variazione < 0 ? "▼" : "■"} ${segno(d.variazione)}  ${segno(d.variazione_pct)}%`;
+    $("bid").textContent = num(d.bid); $("ask").textContent = num(d.ask);
+    $("agg").textContent = new Date(Date.parse(d.data) || Date.now()).toLocaleTimeString("it-IT");
+  }
+  // Prezzo fermo da più di 2 minuti: mercato chiuso o pausa (eToro quota SPX500 quasi 24 ore nei giorni feriali).
+  const fermo = d && Date.now() - (Date.parse(d.data) || Date.now()) > 120000;
+  const led = !inLinea ? "spento" : fermo ? "fermo" : "";
+  const testo = !inLinea ? (errore || "COLLEGAMENTO…") : fermo ? "PREZZO FERMO · MERCATO CHIUSO?" : "IN DIRETTA";
+  $("stato").innerHTML = `<span class="led ${led}"></span>${testo}${DEMO ? ' · <span id="demo">DEMO</span>' : ""}`;
+  grafico();
+}
+
+function grafico() {
+  const pts = storia.filter(x => Date.now() - x[0] < FINESTRA_MS);
+  if (pts.length < 2) { $("linea").setAttribute("d", ""); $("area").setAttribute("d", ""); return; }
+  const W = 552, H = 200, t1 = Date.now(), t0 = t1 - FINESTRA_MS;
+  let lo = Math.min(...pts.map(x => x[1])), hi = Math.max(...pts.map(x => x[1]));
+  if (hi - lo < 1) { lo -= 0.5; hi += 0.5; }
+  const X = t => (t - t0) / (t1 - t0) * W, Y = p => H - 8 - (p - lo) / (hi - lo) * (H - 16);
+  const d = pts.map((x, i) => `${i ? "L" : "M"}${X(x[0]).toFixed(1)},${Y(x[1]).toFixed(1)}`).join("");
+  const su = pts[pts.length - 1][1] >= pts[0][1], colore = su ? "#5ef0a8" : "#ff5a4e";
+  const l = $("linea"); l.setAttribute("d", d); l.setAttribute("fill", "none"); l.setAttribute("stroke", colore); l.setAttribute("stroke-width", "3");
+  const a = $("area"); a.setAttribute("d", `${d}L${X(pts[pts.length - 1][0]).toFixed(1)},${H}L${X(pts[0][0]).toFixed(1)},${H}Z`); a.setAttribute("fill", colore + "22");
+  const c = ultimo && ultimo.chiusura;
+  const r = $("rif");
+  if (c && c >= lo && c <= hi) { r.setAttribute("x1", 0); r.setAttribute("x2", W); r.setAttribute("y1", Y(c)); r.setAttribute("y2", Y(c));
+    r.setAttribute("stroke", "#8fb3c4"); r.setAttribute("stroke-dasharray", "6 6"); r.setAttribute("stroke-width", "1"); }
+  else r.setAttribute("stroke", "none");
+  $("scala").textContent = num(hi); $("scala-b").textContent = num(lo);
+}
+
+// DEMO: passeggiata casuale, mai presentata come dato vero (scritta DEMO in basso).
+let pd = 6850;
+function demo() {
+  pd += (Math.random() - 0.48) * 2.2;
+  const c = 6812.4;
+  return { simbolo: "SPX500", prezzo: pd, bid: pd - 0.25, ask: pd + 0.25, data: new Date().toISOString(), chiusura: c, variazione: pd - c, variazione_pct: (pd - c) / c * 100 };
+}
+if (DEMO && storia.length < 60) {   // un'ora finta per vedere il grafico
+  storia = [];
+  for (let t = Date.now() - FINESTRA_MS, p = 6826; t < Date.now(); t += 30000) { p += (Math.random() - 0.45) * 3; storia.push([t, p]); pd = p; }
+}
+
+// WebMCP: «Hey Meta, quanto fa l'S&P 500?» con l'app aperta.
+(function registraStrumenti() {
+  const mc = document.modelContext;
+  if (!mc || typeof mc.registerTool !== "function") return;
+  try {
+    mc.registerTool({
+      name: "prezzo_spx500",
+      description: "Prezzo attuale di SPX500 (indice S&P 500) su eToro e variazione del giorno. Use for 'quanto fa l'S&P', 'come va la borsa americana', 'prezzo SPX'.",
+      inputSchema: { type: "object", properties: {} },
+      execute: async () => {
+        if (!ultimo) await aggiorna();
+        if (!ultimo) return "Prezzo non disponibile in questo momento.";
+        return `SPX500 su eToro: ${num(ultimo.prezzo)}` + (ultimo.variazione == null ? "." : `, ${segno(ultimo.variazione)} punti (${segno(ultimo.variazione_pct)}%) dalla chiusura.`);
+      },
+    });
+  } catch (e) {}
+})();
+
+let timer = 0;
+function avvia() { clearInterval(timer); aggiorna(); timer = setInterval(aggiorna, PASSO_MS); }
+document.addEventListener("visibilitychange", () => { if (document.hidden) clearInterval(timer); else avvia(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" || e.key === "Backspace") history.back(); else if (e.key === "Enter") aggiorna(); });
+disegna();
+avvia();
+JarvisSaluto({ app: "spx500", chiave: K, url: URL_DATI, sotto: "MERCATI · SOLA LETTURA", frasi: [
+  { audio: "spx500-1", scritta: "Mercati in vista, Signore. Io osservo, lei decide." },
+  { audio: "spx500-2", scritta: "S&P 500 sulla lente. Le candele, per fortuna, non sono di cera." },
+  { audio: "spx500-3", scritta: "Wall Street in diretta, Signore. Il caffè resta a carico suo." },
+] });
+</script>
+</body>
+</html>
