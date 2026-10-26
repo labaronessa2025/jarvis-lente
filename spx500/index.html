@@ -68,12 +68,13 @@ const PASSO_MS = 3000;
 const FINESTRA_MS = 60 * 60 * 1000;   // il grafico mostra l'ultima ora
 const DEMO = /[?&]demo\b/.test(location.search);
 const $ = id => document.getElementById(id);
-// Stessa chiave di «Jarvis» (stesso sito): basta averla aperta una volta; altrimenti arriva nell'indirizzo (#k=…).
+const VERSIONE = "v3";
+// La chiave arriva nell'indirizzo (#k=… o ?k=…, perché l'app Meta AI può scartare la parte dopo #) e si salva sugli occhiali.
 const K = (() => {
-  const m = location.hash.match(/k=([\w-]{20,})/);
+  const m = (location.hash + "&" + location.search).match(/k=([\w-]{20,})/);
   if (m) {
     try { localStorage.setItem("lente-k", m[1]); } catch (e) {}
-    history.replaceState(null, "", location.pathname + location.search);
+    history.replaceState(null, "", location.pathname + (DEMO ? "?demo" : ""));
     return m[1];
   }
   try { return localStorage.getItem("lente-k") || ""; } catch (e) { return ""; }
@@ -94,7 +95,7 @@ let ultimo = null, inLinea = false, errore = "";
 async function aggiorna() {
   try {
     const d = DEMO ? demo() : await (async () => {
-      if (!K) throw new Error("chiave assente: aprire prima l'app Jarvis");
+      if (!K) throw new Error(`chiave assente · ${VERSIONE} · ${location.hash ? "#" : "-"}${location.search ? "?" : "-"}`);
       const r = await fetch(URL_PREZZO, { headers: { "x-lente-key": K }, cache: "no-store" });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.errore || "errore " + r.status);
