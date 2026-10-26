@@ -68,7 +68,16 @@ const PASSO_MS = 3000;
 const FINESTRA_MS = 60 * 60 * 1000;   // il grafico mostra l'ultima ora
 const DEMO = /[?&]demo\b/.test(location.search);
 const $ = id => document.getElementById(id);
-const K = (() => { try { return localStorage.getItem("lente-k") || ""; } catch (e) { return ""; } })();
+// Stessa chiave di «Jarvis» (stesso sito): basta averla aperta una volta; altrimenti arriva nell'indirizzo (#k=…).
+const K = (() => {
+  const m = location.hash.match(/k=([\w-]{20,})/);
+  if (m) {
+    try { localStorage.setItem("lente-k", m[1]); } catch (e) {}
+    history.replaceState(null, "", location.pathname + location.search);
+    return m[1];
+  }
+  try { return localStorage.getItem("lente-k") || ""; } catch (e) { return ""; }
+})();
 
 const num = (n, d = 2) => n == null || !isFinite(n) ? "—" : n.toLocaleString("it-IT", { minimumFractionDigits: d, maximumFractionDigits: d });
 const segno = n => (n > 0 ? "+" : n < 0 ? "−" : "") + num(Math.abs(n));
