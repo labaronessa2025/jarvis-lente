@@ -294,12 +294,34 @@ function avvia() {
   const togli = () => { document.removeEventListener("keydown", alPrimoGesto, true); document.removeEventListener("click", alPrimoGesto, true); };
   document.addEventListener("keydown", alPrimoGesto, true);
   document.addEventListener("click", alPrimoGesto, true);
-  if (navigator.geolocation) {
-    idPosizione = navigator.geolocation.watchPosition(suPosizione,
-      e => { errore = e.code === 1 ? "POSIZIONE NEGATA<br><span style='color:var(--tenue)'>serve il GPS del telefono</span>" : "POSIZIONE NON DISPONIBILE"; disegnaStato(); },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
-  } else errore = "POSIZIONE NON SUPPORTATA";
+  avviaPosizione();
   disegnaStato();
+}
+
+// Guida Meta: posizione e sensori vanno chiesti dopo un gesto di chi indossa gli occhiali. Si prova subito (se il permesso
+// c'è già, parte da sola); se viene rifiutata, si richiede al primo gesto qualsiasi della Neural Band (26/10).
+let gestoPosizione = null, rifiuti = 0;
+function avviaPosizione() {
+  if (!navigator.geolocation) { errore = "POSIZIONE NON SUPPORTATA"; return; }
+  if (idPosizione != null) navigator.geolocation.clearWatch(idPosizione);
+  idPosizione = navigator.geolocation.watchPosition(suPosizione, e => {
+    if (e.code === 1 && !pos && ++rifiuti <= 2) {   // al terzo rifiuto è un permesso negato davvero
+      errore = "UN GESTO PER ATTIVARE LA POSIZIONE<br><span style='color:var(--tenue)'>pizzico o freccia, uno qualsiasi</span>";
+      if (!gestoPosizione) {
+        gestoPosizione = () => {
+          document.removeEventListener("keydown", gestoPosizione, true);
+          document.removeEventListener("click", gestoPosizione, true);
+          gestoPosizione = null;
+          errore = "ATTIVAZIONE POSIZIONE…";
+          disegnaStato();
+          avviaPosizione();
+        };
+        document.addEventListener("keydown", gestoPosizione, true);
+        document.addEventListener("click", gestoPosizione, true);
+      }
+    } else if (!pos) errore = e.code === 1 ? "POSIZIONE NEGATA<br><span style='color:var(--tenue)'>consentire la posizione all'app Meta AI sul telefono</span>" : "POSIZIONE NON DISPONIBILE";
+    disegnaStato();
+  }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
 }
 function avviaDemo() {   // prova nel browser: Galatina (o ?demo&lat=…&lon=…), testa che ruota piano. Mai dati veri.
   $("app").insertAdjacentHTML("beforeend", `<div id="demo">DEMO</div>`);
