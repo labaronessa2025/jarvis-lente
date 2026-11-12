@@ -7,7 +7,8 @@
 <meta name="robots" content="noindex, nofollow">
 <title>SPX500</title>
 <style>
-  /* Stesso HUD delle altre web app di Jarvis: nero (trasparente sulla lente), ciano, 600×600 senza scorrimento. */
+  /* HUD ad anello (v5, 12/11/2026): nessun grafico. Nero = trasparente sulla lente, 600×600 senza scorrimento.
+     L'anello si riempie con la variazione del giorno: verde in senso orario se sale, rosso in senso antiorario se scende; pieno = ±2%. */
   :root {
     --ciano:#3fd4ff; --ciano-t:#3fd4ff55; --ciano-f:#3fd4ff22; --testo:#e8f7ff; --tenue:#8fb3c4;
     --su:#5ef0a8; --giu:#ff5a4e; --ambra:#ffb340;
@@ -16,32 +17,20 @@
   }
   * { box-sizing:border-box; margin:0; padding:0; }
   html, body { width:100%; height:100%; overflow:hidden; background:#000; color:var(--testo); font:20px/1.3 var(--sans); }
-  #app { position:relative; display:flex; flex-direction:column; height:100%; padding:18px 24px 16px; }
-  #app::before, #app::after { content:""; position:absolute; width:34px; height:34px; border:2px solid var(--ciano); opacity:.7; }
-  #app::before { top:6px; left:6px; border-right:0; border-bottom:0; }
-  #app::after { bottom:6px; right:6px; border-left:0; border-top:0; }
-  header { display:flex; align-items:baseline; gap:12px; }
-  h1 { flex:1; font:700 24px/1 var(--sans); letter-spacing:5px; color:var(--ciano); text-shadow:0 0 10px var(--ciano-t); }
-  h1 small { display:block; margin-top:6px; font:600 13px/1 var(--mono); letter-spacing:3px; color:var(--tenue); }
-  #ora { font:700 24px/1 var(--mono); }
-  #prezzo { margin-top:26px; font:700 92px/1 var(--mono); letter-spacing:-2px; text-shadow:0 0 18px var(--ciano-t); }
-  #variazione { margin-top:10px; font:700 30px/1 var(--mono); }
+  #app { position:relative; width:100%; height:100%; }
+  #anello { position:absolute; left:50%; top:calc(50% - 10px); width:min(92vw, 92vh); height:min(92vw, 92vh); transform:translate(-50%, -50%); }
+  #fondo { fill:none; stroke:var(--ciano-f); stroke-width:14; }
+  #arco { fill:none; stroke:var(--su); stroke-width:14; stroke-linecap:round; transition:stroke-dasharray .6s ease, stroke .3s; filter:drop-shadow(0 0 8px currentColor); }
+  #zero { stroke:var(--tenue); stroke-width:2; }
+  #centro { position:absolute; left:0; right:0; top:calc(50% - 10px); transform:translateY(-50%); text-align:center; }
+  .lab { font:600 15px/1 var(--mono); letter-spacing:3px; color:var(--tenue); }
+  #prezzo { margin-top:20px; font:700 84px/1 var(--mono); letter-spacing:-2px; text-shadow:0 0 18px var(--ciano-t); }
+  #variazione { margin-top:16px; font:700 34px/1 var(--mono); color:var(--tenue); }
   #variazione.su { color:var(--su); text-shadow:0 0 12px #5ef0a855; }
   #variazione.giu { color:var(--giu); text-shadow:0 0 12px #ff5a4e55; }
-  #c15 { margin-top:10px; font:600 16px/1 var(--mono); letter-spacing:1px; color:var(--tenue); white-space:nowrap; }
-  #c15 b { color:var(--ciano); font-weight:700; margin-right:6px; }
-  #c15 .su { color:var(--su); } #c15 .giu { color:var(--giu); }
-  #grafico { margin-top:16px; flex:1; min-height:0; position:relative; border-top:1px solid var(--ciano-f); border-bottom:1px solid var(--ciano-f); }
-  #grafico svg { position:absolute; inset:0; width:100%; height:100%; }
-  #scala { position:absolute; right:0; top:4px; font:600 14px var(--mono); color:var(--tenue); }
-  #scala-b { position:absolute; right:0; bottom:4px; font:600 14px var(--mono); color:var(--tenue); }
-  #finestra { position:absolute; left:0; bottom:4px; font:600 14px var(--mono); color:var(--tenue); letter-spacing:1px; }
-  #quote { display:flex; justify-content:space-between; margin-top:12px; font:600 20px var(--mono); color:var(--testo); }
-  #quote span b { color:var(--tenue); font-weight:600; margin-right:8px; }
-  #quote i { font-style:normal; }
-  footer { display:flex; justify-content:space-between; margin-top:10px; padding-top:8px; border-top:1px solid var(--ciano-f);
-    font:600 14px/1 var(--mono); letter-spacing:1px; color:var(--tenue); }
-  .led { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--su); box-shadow:0 0 6px var(--su); margin-right:7px; }
+  #stato { margin:26px auto 0; max-width:380px; font:600 15px/1.3 var(--mono); letter-spacing:3px; color:var(--tenue); }
+  #scala { position:absolute; left:0; right:0; bottom:14px; text-align:center; }
+  .led { display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--su); box-shadow:0 0 6px var(--su); margin-right:8px; vertical-align:1px; }
   .led.fermo { background:var(--ambra); box-shadow:0 0 6px var(--ambra); }
   .led.spento { background:var(--giu); box-shadow:0 0 6px var(--giu); }
   #demo { color:var(--ambra); }
@@ -50,17 +39,18 @@
 </head>
 <body>
 <div id="app">
-  <header>
-    <h1>SPX500<small>ETORO · TEMPO REALE · SOLA LETTURA</small></h1>
-    <div id="ora">--:--</div>
-  </header>
-  <div id="prezzo">—</div>
-  <div id="variazione">&nbsp;</div>
-  <div id="c15">&nbsp;</div>
-  <div id="grafico"><svg viewBox="0 0 552 200" preserveAspectRatio="none" aria-hidden="true"><path id="area"/><path id="linea"/><line id="rif"/></svg>
-    <span id="scala"></span><span id="scala-b"></span><span id="finestra">ULTIMA ORA</span></div>
-  <div id="quote"><span><b>DENARO</b><i id="bid">—</i></span><span><b>LETTERA</b><i id="ask">—</i></span></div>
-  <footer><span id="stato"><span class="led spento"></span>COLLEGAMENTO…</span><span id="agg">--:--:--</span></footer>
+  <svg id="anello" viewBox="0 0 520 520" aria-hidden="true">
+    <circle id="fondo" cx="260" cy="260" r="230"/>
+    <circle id="arco" cx="260" cy="260" r="230" stroke-dasharray="0 1446" transform="rotate(-90 260 260)"/>
+    <line id="zero" x1="260" y1="16" x2="260" y2="44"/>
+  </svg>
+  <div id="centro">
+    <div class="lab">SPX500</div>
+    <div id="prezzo">—</div>
+    <div id="variazione">&nbsp;</div>
+    <div id="stato"><span class="led spento"></span>COLLEGAMENTO…</div>
+  </div>
+  <div id="scala" class="lab">ANELLO PIENO = ±2%</div>
 </div>
 <script>
 "use strict";
@@ -70,10 +60,11 @@ const URL_PREZZO = "https://wbcszvjszruatmpigncd.supabase.co/functions/v1/jarvis
 const URL_DATI = "https://wbcszvjszruatmpigncd.supabase.co/functions/v1/jarvis-lente";   // solo per la voce del saluto
 const PASSO_MS = 3000;
 const RITARDO_MS = 3 * 60 * 1000;   // la v2 di eToro aggiorna l'orario una volta al minuto: oltre 3 minuti il dato è vecchio
-const FINESTRA_MS = 60 * 60 * 1000;   // il grafico mostra l'ultima ora
+const SCALA_PCT = 2;   // anello pieno = ±2% dalla chiusura
+const GIRO = 2 * Math.PI * 230;
 const DEMO = /[?&]demo\b/.test(location.search);
 const $ = id => document.getElementById(id);
-const VERSIONE = "v4";
+const VERSIONE = "v5";
 // La chiave arriva nell'indirizzo (#k=… o ?k=…, perché l'app Meta AI può scartare la parte dopo #) e si salva sugli occhiali.
 const K = (() => {
   const m = (location.hash + "&" + location.search).match(/k=([\w-]{20,})/);
@@ -85,16 +76,15 @@ const K = (() => {
   try { return localStorage.getItem("lente-k") || ""; } catch (e) { return ""; }
 })();
 
-const num = (n, d = 2) => n == null || !isFinite(n) ? "—" : n.toLocaleString("it-IT", { minimumFractionDigits: d, maximumFractionDigits: d });
+// Formato italiano con il punto delle migliaia sempre (toLocaleString in it-IT lo omette sotto le 10.000).
+const num = (n, d = 2) => {
+  if (n == null || !isFinite(n)) return "—";
+  const [i, f] = Math.abs(n).toFixed(d).split(".");
+  return (n < 0 ? "-" : "") + i.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + (f ? "," + f : "");
+};
 const segno = n => (n > 0 ? "+" : n < 0 ? "−" : "") + num(Math.abs(n));
 
-// Storia dei prezzi per il grafico: tenuta sugli occhiali, così riaprendo l'app il grafico non riparte da zero.
-let storia = (() => { try { return JSON.parse(localStorage.getItem("spx-storia-v4") || "[]"); } catch (e) { return []; } })();
-function aggiungi(t, p) {
-  storia.push([t, p]);
-  storia = storia.filter(x => t - x[0] < FINESTRA_MS);
-  try { localStorage.setItem("spx-storia-v4", JSON.stringify(storia)); } catch (e) {}
-}
+try { localStorage.removeItem("spx-storia-v4"); } catch (e) {}   // storia del vecchio grafico, non serve più
 
 let ultimo = null, inLinea = false, errore = "";
 async function aggiorna() {
@@ -112,7 +102,6 @@ async function aggiorna() {
     }
     if (d.aperto == null && ultimo) d.aperto = ultimo.aperto;
     ultimo = d; inLinea = true; errore = "";
-    aggiungi(Date.now(), d.prezzo);   // il prezzo è la chiusura della candela da 15 minuti in corso, cioè adesso
   } catch (e) {
     inLinea = false; errore = String(e.message || e).toUpperCase();
   }
@@ -120,21 +109,20 @@ async function aggiorna() {
 }
 
 function disegna() {
-  $("ora").textContent = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+  const ora = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
   const d = ultimo;
   if (d) {
     $("prezzo").textContent = num(d.prezzo);
     const v = $("variazione");
     v.className = d.variazione > 0 ? "su" : d.variazione < 0 ? "giu" : "";
-    v.textContent = d.variazione == null ? "VARIAZIONE N/D" : `${d.variazione > 0 ? "▲" : d.variazione < 0 ? "▼" : "■"} ${segno(d.variazione)}  ${segno(d.variazione_pct)}%`;
-    $("bid").textContent = num(d.bid); $("ask").textContent = num(d.ask);
-    $("agg").textContent = new Date(Date.parse(d.data) || Date.now()).toLocaleTimeString("it-IT");
-    const c = d.candela15;
-    $("c15").innerHTML = c && c.inizio ? (() => {
-      const ora = new Date(Date.parse(c.inizio)).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
-      const dir = c.chiusura > c.apertura ? "su" : c.chiusura < c.apertura ? "giu" : "";
-      return `<b>15M ${ora}</b>A ${num(c.apertura)} · <span class="su">M ${num(c.massimo)}</span> · <span class="giu">m ${num(c.minimo)}</span> <span class="${dir}">${dir === "su" ? "▲" : dir === "giu" ? "▼" : "■"}</span>`;
-    })() : "15M · CANDELA N/D";
+    v.textContent = d.variazione == null ? "VARIAZIONE N/D" : `${segno(d.variazione)} · ${segno(d.variazione_pct)}%`;
+    // Anello: frazione della variazione su ±2%; in salita orario, in discesa antiorario (specchiato).
+    const pct = d.variazione_pct;
+    const f = pct == null || !isFinite(pct) ? 0 : Math.min(Math.abs(pct) / SCALA_PCT, 1);
+    const arco = $("arco");
+    arco.setAttribute("stroke-dasharray", `${(f * GIRO).toFixed(1)} ${GIRO.toFixed(1)}`);
+    arco.style.stroke = arco.style.color = pct < 0 ? "var(--giu)" : "var(--su)";
+    arco.setAttribute("transform", pct < 0 ? "rotate(-90 260 260) scale(1 -1) translate(0 -520)" : "rotate(-90 260 260)");
   }
   // Stato: eToro dice se il mercato è aperto; se è aperto ma l'orario della quotazione è vecchio, il dato è in ritardo.
   const eta = d ? Date.now() - (Date.parse(d.data) || Date.now()) : 0;
@@ -142,28 +130,8 @@ function disegna() {
   const ritardo = d && !chiuso && eta > RITARDO_MS;
   const led = !inLinea ? "spento" : chiuso || ritardo ? "fermo" : "";
   const testo = !inLinea ? (errore || "COLLEGAMENTO…") : chiuso ? "MERCATO CHIUSO"
-    : ritardo ? `DATI IN RITARDO · ${Math.round(eta / 60000)} MIN` : "IN DIRETTA";
-  $("stato").innerHTML = `<span class="led ${led}"></span>${testo}${DEMO ? ' · <span id="demo">DEMO</span>' : ""}`;
-  grafico();
-}
-
-function grafico() {
-  const pts = storia.filter(x => Date.now() - x[0] < FINESTRA_MS);
-  if (pts.length < 2) { $("linea").setAttribute("d", ""); $("area").setAttribute("d", ""); return; }
-  const W = 552, H = 200, t1 = Date.now(), t0 = t1 - FINESTRA_MS;
-  let lo = Math.min(...pts.map(x => x[1])), hi = Math.max(...pts.map(x => x[1]));
-  if (hi - lo < 1) { lo -= 0.5; hi += 0.5; }
-  const X = t => (t - t0) / (t1 - t0) * W, Y = p => H - 8 - (p - lo) / (hi - lo) * (H - 16);
-  const d = pts.map((x, i) => `${i ? "L" : "M"}${X(x[0]).toFixed(1)},${Y(x[1]).toFixed(1)}`).join("");
-  const su = pts[pts.length - 1][1] >= pts[0][1], colore = su ? "#5ef0a8" : "#ff5a4e";
-  const l = $("linea"); l.setAttribute("d", d); l.setAttribute("fill", "none"); l.setAttribute("stroke", colore); l.setAttribute("stroke-width", "3");
-  const a = $("area"); a.setAttribute("d", `${d}L${X(pts[pts.length - 1][0]).toFixed(1)},${H}L${X(pts[0][0]).toFixed(1)},${H}Z`); a.setAttribute("fill", colore + "22");
-  const c = ultimo && ultimo.chiusura;
-  const r = $("rif");
-  if (c && c >= lo && c <= hi) { r.setAttribute("x1", 0); r.setAttribute("x2", W); r.setAttribute("y1", Y(c)); r.setAttribute("y2", Y(c));
-    r.setAttribute("stroke", "#8fb3c4"); r.setAttribute("stroke-dasharray", "6 6"); r.setAttribute("stroke-width", "1"); }
-  else r.setAttribute("stroke", "none");
-  $("scala").textContent = num(hi); $("scala-b").textContent = num(lo);
+    : ritardo ? `IN RITARDO · ${Math.round(eta / 60000)} MIN` : "IN DIRETTA";
+  $("stato").innerHTML = `<span class="led ${led}"></span>${testo} · ${ora}${DEMO ? ' · <span id="demo">DEMO</span>' : ""}`;
 }
 
 // DEMO: passeggiata casuale, mai presentata come dato vero (scritta DEMO in basso).
@@ -176,11 +144,6 @@ function demo() {
     candela15: { inizio: t15, apertura: pd - 3, massimo: pd + 1.5, minimo: pd - 4, chiusura: pd },
     chiusura: c, variazione: pd - c, variazione_pct: (pd - c) / c * 100 };
 }
-if (DEMO && storia.length < 60) {   // un'ora finta per vedere il grafico
-  storia = [];
-  for (let t = Date.now() - FINESTRA_MS, p = 6826; t < Date.now(); t += 30000) { p += (Math.random() - 0.45) * 3; storia.push([t, p]); pd = p; }
-}
-
 // WebMCP: «Hey Meta, quanto fa l'S&P 500?» con l'app aperta.
 (function registraStrumenti() {
   const mc = document.modelContext;
