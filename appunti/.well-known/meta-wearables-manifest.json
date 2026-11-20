@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "name": "Appunti",
+  "description": "Elenchi puntati da tenere sott'occhio mentre parla: un punto per gesto, quello attivo si ingrandisce con il dettaglio. Jarvis prepara gli elenchi nuovi dai libri o dal web.",
+  "appearance": {
+    "theme_color": "#3FD4FF",
+    "icon": {
+      "src": "../icona-jarvis.svg"
+    }
+  }
+}
