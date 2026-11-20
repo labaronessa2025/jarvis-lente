@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Appunti di Jarvis: elenchi puntati da tenere sott'occhio mentre si parla, un punto per gesto.">
+<title>Appunti</title>
+<style>
+  /* HUD di Jarvis (20/11/2026): nero = trasparente sulla lente, ciano che brilla, ambra per web e avvisi. 600×600.
+     Quattro stati: ELENCHI → PUNTI (un punto per gesto, quello attivo grande con il dettaglio) e NUOVO → PREPARAZIONE. */
+  :root {
+    --ciano:#3fd4ff; --ciano-t:#3fd4ff55; --ciano-f:#3fd4ff1f; --testo:#f2fbff; --tenue:#8fb3c4; --ambra:#ffb340; --rosso:#ff5a4e; --verde:#5ef0a8;
+    --mono:"SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    --sans:"SF Pro Display", -apple-system, "Roboto", "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; color:var(--testo); font:20px/1.3 var(--sans); }
+  #app { position:relative; display:flex; flex-direction:column; height:100%; padding:20px 26px 18px; }
+  #app::before, #app::after { content:""; position:absolute; width:30px; height:30px; border:2px solid var(--ciano); opacity:.75; pointer-events:none; }
+  #app::before { top:6px; left:6px; border-right:0; border-bottom:0; }
+  #app::after { bottom:6px; right:6px; border-left:0; border-top:0; }
+
+  header { display:flex; align-items:center; gap:12px; padding-bottom:11px; position:relative;
+    font:600 14px/1.2 var(--mono); letter-spacing:3px; color:var(--tenue); }
+  header::after { content:""; position:absolute; left:0; right:0; bottom:0; height:1px; background:linear-gradient(90deg,var(--ciano),var(--ciano-t) 40%,transparent); }
+  header::before { content:""; position:absolute; bottom:-1px; left:0; width:90px; height:2px; background:var(--ciano); box-shadow:0 0 10px var(--ciano); opacity:0; }
+  .pensa header::before { opacity:1; animation:scansione 1.4s cubic-bezier(.6,0,.4,1) infinite alternate; }
+  @keyframes scansione { from { left:0; } to { left:calc(100% - 90px); } }
+  .reattore { width:30px; height:30px; flex:none; }
+  .reattore .anello { transform-origin:50% 50%; animation:gira 10s linear infinite; }
+  .pensa .reattore .anello { animation-duration:1.4s; }
+  @keyframes gira { to { transform:rotate(360deg); } }
+  #titolo { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #titolo b { color:var(--ciano); font-weight:700; text-shadow:0 0 8px var(--ciano-t); }
+  #conta { flex:none; color:var(--testo); font-size:15px; }
+  #conta b { color:var(--ciano); }
+
+  .vista { display:none; flex:1; min-height:0; flex-direction:column; padding-top:16px; animation:entra .45s cubic-bezier(.6,0,.4,1); }
+  .vista.attiva { display:flex; }
+  @keyframes entra { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+  .etq { font:600 14px/1.2 var(--mono); letter-spacing:4px; color:var(--tenue); margin-bottom:10px; display:flex; align-items:center; gap:10px; }
+  .etq::after { content:""; flex:1; height:1px; background:linear-gradient(90deg,var(--ciano-f),transparent); }
+  .etq.web { color:var(--ambra); }
+  .avviso { font:600 15px/1.4 var(--mono); letter-spacing:1px; color:var(--ambra); }
+
+  /* ELENCHI: una riga per gesto, la riga scelta si espande; l'ultima crea un elenco nuovo */
+  .lista { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; padding:2px 2px 8px; }
+  .lista::-webkit-scrollbar { display:none; }
+  .riga { display:block; width:100%; text-align:left; margin:7px 0; padding:11px 16px 11px 44px; position:relative; cursor:pointer;
+    background:transparent; border:1px solid transparent; border-radius:10px; color:#a9c6d3; font:600 24px/1.25 var(--sans);
+    transition:background .3s, border-color .3s, color .3s, box-shadow .3s; }
+  .riga::before { content:""; position:absolute; left:17px; top:21px; width:9px; height:9px; background:var(--tenue); transform:rotate(45deg); transition:background .3s, box-shadow .3s; }
+  .riga .dett, .riga .primo { display:none; margin-top:7px; font:600 15px/1.45 var(--mono); letter-spacing:2px; color:var(--tenue); }
+  .riga .primo { font:500 18px/1.35 var(--sans); letter-spacing:0; color:#cfe6ef; margin-top:4px; }
+  .riga .primo::before { content:"› "; color:var(--ciano); }
+  .riga .mini { font:700 13px/1 var(--mono); letter-spacing:2px; color:var(--tenue); margin-left:10px; vertical-align:4px; }
+  .riga.sel { color:var(--testo); font-size:30px; font-weight:700; border-color:var(--ciano); background:#3fd4ff14;
+    box-shadow:0 0 18px #3fd4ff33, inset 0 0 22px #3fd4ff10; }
+  .riga.sel::before { background:var(--ciano); box-shadow:0 0 8px var(--ciano); top:25px; }
+  .riga.sel .dett, .riga.sel .primo { display:block; }
+  .riga.sel .mini { display:none; }
+  .riga:focus { outline:none; }
+  .riga.nuovo { text-align:center; padding-left:16px; margin-top:14px; font:700 20px/1 var(--mono); letter-spacing:4px; color:var(--ciano); border-color:#3fd4ff66; padding-top:16px; padding-bottom:16px; }
+  .riga.nuovo::before { display:none; }
+  .riga.nuovo.sel { background:var(--ciano); color:#00141c; font-size:22px; box-shadow:0 0 22px #3fd4ff88; }
+
+  /* PUNTI: il punto attivo è grande (32 px) con il dettaglio; gli altri restano piccoli per dare il contesto */
+  #lista-punti { padding-top:0; }
+  .pt { display:block; width:100%; text-align:left; margin:6px 0; padding:10px 14px 10px 50px; position:relative; cursor:default;
+    background:transparent; border:1px solid transparent; border-radius:10px; color:#9fb8c4; font:500 23px/1.3 var(--sans);
+    transition:background .25s, border-color .25s, color .25s, box-shadow .25s; overflow-wrap:anywhere; }
+  .pt i { position:absolute; left:14px; top:14px; font:700 14px/1 var(--mono); font-style:normal; letter-spacing:1px; color:var(--tenue); }
+  .pt .det { display:none; margin-top:9px; font:600 22px/1.35 var(--sans); color:#d4ecf5; padding-left:12px; border-left:2px solid var(--ciano-t); }
+  .pt.sel { color:var(--testo); font-size:32px; font-weight:700; line-height:1.22; border-color:var(--ciano); background:#3fd4ff12;
+    box-shadow:0 0 18px #3fd4ff33, inset 0 0 22px #3fd4ff10; }
+  .pt.sel i { color:var(--ciano); top:19px; font-size:15px; text-shadow:0 0 8px var(--ciano-t); }
+  .pt.sel .det { display:block; }
+  .pt.fatto { color:#6f8a96; }
+  .pt:focus { outline:none; }
+  #p-fonte { display:none; margin-top:8px; align-self:flex-start; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    font:700 13px/1.3 var(--mono); letter-spacing:2px; color:var(--ciano); border:1px solid #3fd4ff77; padding:6px 10px; border-radius:6px; }
+  #p-fonte.visibile { display:block; }
+  #p-fonte.web { color:var(--ambra); border-color:#ffb34099; }
+  .prog { display:flex; gap:5px; margin-top:10px; height:6px; flex:none; }
+  .prog span { flex:1; min-width:3px; border-radius:3px; background:#1a2a30; transition:background .25s, box-shadow .25s; }
+  .prog span.on { background:var(--ciano); box-shadow:0 0 8px var(--ciano-t); }
+
+  /* NUOVO: l'argomento si detta, poi INVIA (mai invio automatico: ogni invio è un elenco salvato) */
+  .invito { font:700 30px/1.2 var(--sans); color:var(--testo); margin:6px 0 20px; }
+  .invito em { font-style:normal; color:var(--ciano); text-shadow:0 0 12px var(--ciano-t); }
+  .riga-tema { display:flex; gap:10px; align-items:stretch; }
+  #tema { flex:1; min-width:0; font:600 22px/1.3 var(--sans); color:var(--testo); background:transparent; border:1px solid var(--ciano-t);
+    padding:15px 16px; border-radius:0; clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px); }
+  #tema::placeholder { color:var(--ciano); opacity:.9; }
+  #tema:focus { outline:none; border:2px solid var(--ciano); box-shadow:0 0 16px var(--ciano-t), 0 0 10px var(--ciano-f) inset; }
+  #invia { flex:none; font:700 17px/1 var(--mono); letter-spacing:2px; color:#00141c; background:var(--ciano); border:0; padding:0 18px; cursor:pointer;
+    clip-path:polygon(9px 0,100% 0,calc(100% - 9px) 100%,0 100%); box-shadow:0 0 18px #3fd4ff88; }
+  #invia:focus { outline:3px solid var(--testo); outline-offset:2px; }
+  #invia.spento { background:#1a2a30; color:var(--tenue); box-shadow:none; }
+  #ricevuto { font:600 15px/1.4 var(--mono); color:var(--verde); letter-spacing:1px; margin-top:12px; min-height:21px; overflow-wrap:anywhere; }
+  #ricevuto.avv { color:var(--ambra); }
+  .guida { margin-top:auto; font:600 14px/1.6 var(--mono); letter-spacing:2px; color:var(--tenue); }
+
+  /* PREPARAZIONE dell'elenco nuovo */
+  .chiesto { font:600 18px/1.3 var(--sans); color:var(--tenue); margin-bottom:12px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .chiesto::before { content:"› "; color:var(--ciano); }
+  #g-corpo { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; }
+  #g-corpo::-webkit-scrollbar { display:none; }
+  #g-testo { font:600 25px/1.35 var(--sans); color:var(--testo); white-space:pre-line; }
+  #g-testo.attesa { font:600 17px/1.5 var(--mono); letter-spacing:2px; color:var(--tenue); }
+  #g-testo.errore { font:700 27px/1.3 var(--sans); color:var(--ambra); }
+  #g-nota { margin-top:12px; font:600 15px/1.45 var(--mono); letter-spacing:1px; color:var(--tenue); white-space:pre-line; }
+  #g-punti { list-style:none; }
+  #g-punti li { font:600 22px/1.3 var(--sans); padding:6px 0 6px 26px; position:relative; color:var(--testo); }
+  #g-punti li::before { content:""; position:absolute; left:4px; top:17px; width:8px; height:8px; background:var(--ciano); transform:rotate(45deg); box-shadow:0 0 6px var(--ciano); }
+  .cursore { display:inline-block; width:.5em; color:var(--ciano); animation:lampeggia 1s steps(2) infinite; }
+  @keyframes lampeggia { 50% { opacity:0; } }
+  .stato { font:600 14px/1.2 var(--mono); letter-spacing:3px; color:var(--ciano); margin-top:10px; min-height:17px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .stato.errore { color:var(--rosso); }
+  .stato.fatto { color:var(--verde); }
+  .stato.avv { color:var(--ambra); }
+  .bottoni { display:flex; gap:10px; margin-top:12px; }
+  .btn { flex:1; font:700 16px/1 var(--mono); letter-spacing:3px; padding:15px 0; border:1px solid #3fd4ff66; border-radius:10px;
+    color:var(--ciano); background:transparent; cursor:pointer; transition:background .25s, color .25s, box-shadow .25s; }
+  .btn:focus { outline:none; background:var(--ciano); color:#00141c; box-shadow:0 0 20px #3fd4ff88; }
+  [hidden] { display:none !important; }
+  @media (prefers-reduced-motion:reduce) { .vista, header::before, .reattore .anello, .cursore { animation:none !important; } }
+  @media (max-width:420px) { html, body { font-size:17px; } #app { padding:14px; } .riga { font-size:20px; } .pt.sel { font-size:28px; } }
+</style>
+<script src="../comune/saluto.js"></script>
+</head>
+<body>
+<div id="app">
+  <header>
+    <svg class="reattore" viewBox="0 0 30 30" aria-hidden="true">
+      <circle cx="15" cy="15" r="13" fill="none" stroke="#3fd4ff" stroke-width="2" style="filter:drop-shadow(0 0 3px #3fd4ff)"/>
+      <circle class="anello" cx="15" cy="15" r="9" fill="none" stroke="#3fd4ffaa" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <circle cx="15" cy="15" r="5" fill="#3fd4ff"/>
+    </svg>
+    <span id="titolo">APPUNTI</span>
+    <span id="conta"></span>
+  </header>
+
+  <section id="v-elenchi" class="vista attiva" aria-label="Elenchi">
+    <div class="etq">ELENCHI · SCELGA</div>
+    <div id="lista-elenchi" class="lista" role="listbox" aria-label="Elenchi di appunti"></div>
+    <div id="avviso-elenchi" class="avviso"></div>
+  </section>
+
+  <section id="v-punti" class="vista" aria-label="Punti">
+    <div id="lista-punti" class="lista" role="listbox" aria-label="Punti dell'elenco"></div>
+    <span id="p-fonte"></span>
+    <div id="prog" class="prog" aria-hidden="true"></div>
+    <div id="p-stato" class="stato"></div>
+  </section>
+
+  <section id="v-nuovo" class="vista" aria-label="Nuovo elenco">
+    <div class="etq">NUOVO ELENCO</div>
+    <div class="invito">Su cosa le preparo <em>l'elenco</em>, Signore?</div>
+    <div class="riga-tema">
+      <input id="tema" type="text" autocomplete="off" placeholder="● Pizzichi qui e detti" aria-label="Argomento dell'elenco">
+      <button id="invia" type="button">INVIA ▶</button>
+    </div>
+    <div id="ricevuto"></div>
+    <div class="guida">PUNTI DAI LIBRI CON LA FONTE<br>SE NON BASTANO, DAL WEB · <span style="color:var(--ambra)">WEB</span><br>OGNI INVIO È UN ELENCO SALVATO</div>
+  </section>
+
+  <section id="v-genera" class="vista" aria-label="Preparazione dell'elenco">
+    <div id="g-chiesto" class="chiesto"></div>
+    <div id="g-etq" class="etq">ELENCO IN PREPARAZIONE</div>
+    <div id="g-corpo">
+      <div id="g-testo"></div>
+      <ul id="g-punti"></ul>
+      <div id="g-nota"></div>
+    </div>
+    <div id="g-stato" class="stato"></div>
+    <div class="bottoni">
+      <button id="b-nuovo" class="btn" type="button" hidden>NUOVO</button>
+      <button id="b-elenchi" class="btn" type="button" hidden>ELENCHI</button>
+    </div>
+  </section>
+</div>
+<script>
+"use strict";
+// Appunti: gli elenchi arrivano dalla scheda «appunti» pubblicata dal Mac ({elenchi: [{slug, titolo, punti: [{testo, dettaglio}]}]}).
+// Un elenco nuovo è una domanda nella coda di jarvis-lente con tipo «elenco» e salva: true: Jarvis risponde a punti «• …»
+// (dai libri con «Fonte: …» o dal web con «WEB · » davanti), il Mac lo salva e ripubblica la scheda.
+const PRODUZIONE = "https://wbcszvjszruatmpigncd.supabase.co/functions/v1/jarvis-lente";
+// Solo per le prove sul Mac: ?api=http://127.0.0.1:PORTA (o localhost). Qualsiasi altro indirizzo si ignora.
+const API_PROVA = (() => {
+  const a = new URLSearchParams(location.search).get("api");
+  if (!a) return "";
+  try {
+    const u = new URL(a);
+    if (u.protocol === "http:" && (u.hostname === "127.0.0.1" || u.hostname === "localhost")) return u.origin;
+  } catch (e) {}
+  return "";
+})();
+const URL_DATI = API_PROVA ? API_PROVA + "/functions/v1/jarvis-lente" : PRODUZIONE;
+const ATTESA_MAC = 30000;     // in «attesa» (nessuno l'ha presa) oltre 30 s: il Mac non risponde
+const ATTESA_MAX = 150000;    // tetto complessivo una volta che il Mac l'ha presa
+const TEMPO_LETTURA = 10000;  // ogni lettura si abbandona dopo 10 s: niente richieste appese
+const TEMPO_INVIO = 15000;    // l'invio dopo 15 s
+const MAX_TEMA = 500;         // limite della funzione per le domande
+const TITOLO_MAX = 40;
+const PAUSA_GESTO = 1000;     // pulsanti appena comparsi: si ignora il pizzico «di troppo» del gesto precedente
+
+// Chiave «domande»: arriva una volta nell'indirizzo (#k=… o ?k=…) e resta sugli occhiali.
+const K = (() => {
+  const m = (location.hash + "&" + location.search).match(/(?:^|[#?&])k=([\w-]{20,})/);
+  if (m) {
+    try { localStorage.setItem("appunti-k", m[1]); } catch (e) {}
+    history.replaceState(null, "", location.pathname + (API_PROVA ? "?api=" + encodeURIComponent(API_PROVA) : ""));
+    return m[1];
+  }
+  try { return localStorage.getItem("appunti-k") || ""; } catch (e) { return ""; }
+})();
+
+const $ = id => document.getElementById(id);
+const pausa = ms => new Promise(r => setTimeout(r, ms));
+const MAIUSC = s => String(s ?? "").toUpperCase();
+const due = n => String(n).padStart(2, "0");
+const NUOVO = "+nuovo";       // chiave della riga «NUOVO ELENCO» in fondo agli elenchi
+
+let vista = "elenchi", vistaDa = 0;
+let elenchi = [], selChiave = "";         // la selezione segue lo slug: un elenco nuovo inserito non sposta la riga scelta
+let corrente = null, selPunto = 0;        // elenco aperto {slug, titolo, punti, web, fonte, provvisorio}
+let occupato = false, giro = 0, inviato = false;
+let salvaGiro = 0;                        // attesa del salvataggio: separata da giro, «indietro» non la ferma
+
+// ---------- Viste e intestazione ----------
+function mostra(v) {
+  vista = v; vistaDa = Date.now();
+  for (const s of document.querySelectorAll(".vista")) s.classList.toggle("attiva", s.id === "v-" + v);
+  // Un pulsante rimasto col fuoco in una schermata nascosta bloccherebbe la navigazione: si toglie il fuoco solo ai
+  // pulsanti, mai al campo di dettatura.
+  const att = document.activeElement;
+  if (att && att.tagName === "BUTTON" && !$("v-" + v).contains(att)) att.blur();
+  intestazione();
+}
+function intestazione() {
+  const t = $("titolo"), c = $("conta");
+  c.textContent = "";
+  if (vista === "punti" && corrente) {
+    t.innerHTML = "<b></b>";
+    t.querySelector("b").textContent = MAIUSC(corrente.titolo);
+    c.innerHTML = "<b></b>";
+    c.querySelector("b").textContent = (selPunto + 1) + " / " + corrente.punti.length;
+  } else if (vista === "nuovo" || vista === "genera") {
+    t.innerHTML = "APPUNTI · <b>NUOVO</b>";
+  } else {
+    t.textContent = "APPUNTI";
+    if (elenchi.length) c.textContent = elenchi.length + (elenchi.length === 1 ? " ELENCO" : " ELENCHI");
+  }
+}
+const pronto = () => Date.now() - vistaDa > PAUSA_GESTO;
+
+// ---------- Rete ----------
+// Ogni chiamata ha un tempo massimo (AbortController), corpo compreso. Rete assente, tempo scaduto e 5xx portano `ripeti`:
+// durante l'attesa si riprova (non oltre 30 s di fila), l'invio invece non si ripete mai da solo.
+async function chiamata(url, opzioni = {}) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), opzioni.method === "POST" ? TEMPO_INVIO : TEMPO_LETTURA);
+  try {
+    const r = await fetch(url, { ...opzioni, signal: ctl.signal, cache: "no-store",
+      headers: { "x-lente-key": K, "content-type": "application/json", ...(opzioni.headers || {}) } });
+    if (r.status === 401) throw new Error("chiave non valida");
+    if (r.status === 429) throw new Error("troppe richieste: riprovi tra poco");
+    if (!r.ok) throw Object.assign(new Error("errore " + r.status), { ripeti: r.status >= 500 });
+    return await r.json();
+  } catch (e) {
+    if (e && e.name === "AbortError") throw Object.assign(new Error("il collegamento non risponde"), { ripeti: true });
+    if (e instanceof TypeError) throw Object.assign(new Error("collegamento assente"), { ripeti: true });
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Ultimo punto visto per ogni elenco: durante una presentazione si riapre dove si era rimasti.
+const posizione = slug => { try { return +localStorage.getItem("appunti-punto-" + slug) || 0; } catch (e) { return 0; } };
+function ricordaPosizione() {
+  if (!corrente || !corrente.slug) return;
+  try { localStorage.setItem("appunti-punto-" + corrente.slug, String(selPunto)); } catch (e) {}
+}
+
+// ---------- ELENCHI ----------
+function pulisciPunti(lista) {
+  return (Array.isArray(lista) ? lista : []).map(p => p && typeof p === "object"
+    ? { testo: String(p.testo ?? "").trim(), dettaglio: String(p.dettaglio ?? "").trim() }
+    : { testo: String(p ?? "").trim(), dettaglio: "" }).filter(p => p.testo);
+}
+async function caricaElenchi() {
+  try {
+    if (!K) throw new Error("chiave assente · riaprire l'indirizzo completo");
+    const j = await chiamata(URL_DATI + "?scheda=appunti");
+    const d = j && j.dati;
+    elenchi = d && Array.isArray(d.elenchi)
+      ? d.elenchi.filter(e => e && typeof e.slug === "string" && e.slug)
+          .map(e => ({ slug: e.slug, titolo: String(e.titolo || e.slug), punti: pulisciPunti(e.punti),
+            web: e.web === true, fonte: typeof e.fonte === "string" ? e.fonte.trim() : "" }))
+      : [];
+    if (d && d.errore) $("avviso-elenchi").textContent = "MAC: " + MAIUSC(d.errore);
+    else if (!d) $("avviso-elenchi").textContent = "SCHEDA NON ANCORA PUBBLICATA DAL MAC";
+    else if (!elenchi.length) $("avviso-elenchi").textContent = "NESSUN ELENCO · NE PREPARI UNO CON «NUOVO»";
+    else $("avviso-elenchi").textContent = "";
+  } catch (e) {
+    $("avviso-elenchi").textContent = MAIUSC(e.message);
+  }
+  disegnaElenchi(vista === "elenchi");
+  intestazione();
+}
+function disegnaElenchi(fuoco) {
+  const lista = $("lista-elenchi");
+  lista.textContent = "";
+  elenchi.forEach(el => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "riga"; b.setAttribute("role", "option"); b.dataset.chiave = el.slug;
+    b.appendChild(document.createTextNode(el.titolo));
+    const n = el.punti.length;
+    const m = document.createElement("span"); m.className = "mini"; m.textContent = n + " P"; b.appendChild(m);
+    const d = document.createElement("div"); d.className = "dett";
+    const pos = Math.min(posizione(el.slug), Math.max(0, n - 1));
+    d.textContent = n + (n === 1 ? " PUNTO" : " PUNTI") + (pos > 0 ? " · RIPRENDE DAL " + due(pos + 1) : "");
+    b.appendChild(d);
+    if (n) { const p = document.createElement("div"); p.className = "primo"; p.textContent = el.punti[pos].testo; b.appendChild(p); }
+    b.addEventListener("click", () => { if (pronto() && !occupato) apriElenco(el); });
+    b.addEventListener("focus", () => seleziona(el.slug, false));
+    lista.appendChild(b);
+  });
+  const nuovo = document.createElement("button");
+  nuovo.type = "button"; nuovo.className = "riga nuovo"; nuovo.dataset.chiave = NUOVO; nuovo.textContent = "＋ NUOVO ELENCO";
+  nuovo.addEventListener("click", () => { if (pronto() && !occupato) apriNuovo(); });
+  nuovo.addEventListener("focus", () => seleziona(NUOVO, false));
+  lista.appendChild(nuovo);
+  if (!elenchi.some(e => e.slug === selChiave)) selChiave = elenchi.length ? elenchi[0].slug : NUOVO;
+  seleziona(selChiave, fuoco);
+}
+function righe() { return [...$("lista-elenchi").children]; }
+function seleziona(chiave, fuoco) {
+  const r = righe();
+  const k = Math.max(0, r.findIndex(x => x.dataset.chiave === chiave));
+  selChiave = r[k].dataset.chiave;
+  r.forEach((x, j) => { x.classList.toggle("sel", j === k); x.setAttribute("aria-selected", j === k); });
+  if (fuoco && document.activeElement !== r[k]) r[k].focus({ preventScroll: true });
+  r[k].scrollIntoView({ block: "nearest" });
+}
+function passoElenchi(giu) {   // giro continuo: dal primo elenco un ▲ porta a «NUOVO ELENCO»
+  const r = righe();
+  const i = Math.max(0, r.findIndex(x => x.dataset.chiave === selChiave));
+  seleziona(r[(i + (giu ? 1 : -1) + r.length) % r.length].dataset.chiave, true);
+}
+function tornaAgliElenchi(daGesto) {
+  ricordaPosizione();
+  mostra("elenchi");
+  if (daGesto) vistaDa = 0;   // «indietro» è uno scorrimento, non un pizzico: la riga si può aprire subito
+  disegnaElenchi(true);
+  caricaElenchi();
+}
+
+// ---------- PUNTI: un punto per gesto, nessuna voce ----------
+function apriElenco(el, inizio) {
+  corrente = { slug: el.slug, titolo: el.titolo, punti: el.punti, web: el.web === true, fonte: el.fonte || "", provvisorio: false };
+  selChiave = el.slug;
+  selPunto = inizio ?? Math.min(posizione(el.slug), Math.max(0, el.punti.length - 1));
+  statoP("");
+  mostra("punti");
+  disegnaPunti(true);
+}
+function disegnaPunti(fuoco) {
+  const lista = $("lista-punti"), prog = $("prog");
+  lista.textContent = ""; prog.textContent = "";
+  if (!corrente.punti.length) {
+    const v = document.createElement("div"); v.className = "avviso"; v.textContent = "ELENCO VUOTO";
+    lista.appendChild(v);
+  }
+  corrente.punti.forEach((p, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "pt"; b.setAttribute("role", "option");
+    const n = document.createElement("i"); n.textContent = due(i + 1); b.appendChild(n);
+    b.appendChild(document.createTextNode(p.testo));
+    if (p.dettaglio) { const d = document.createElement("div"); d.className = "det"; d.textContent = p.dettaglio; b.appendChild(d); }
+    // Il pizzico su un punto non fa nulla: durante un discorso un tocco per sbaglio non deve cambiare schermata.
+    b.addEventListener("focus", () => { if (selPunto !== i) puntoAttivo(i, false); });
+    lista.appendChild(b);
+    prog.appendChild(document.createElement("span"));
+  });
+  const f = $("p-fonte");
+  // Etichetta su ogni elenco con provenienza: «WEB» per il web, «FONTE · …» per i libri (gli elenchi scritti sul Mac non ne hanno).
+  if (corrente.web || corrente.fonte) {
+    f.className = "visibile" + (corrente.web ? " web" : "");
+    f.textContent = corrente.web ? (corrente.fonte ? "WEB · " + MAIUSC(corrente.fonte) : "WEB · FUORI DAI LIBRI") : "FONTE · " + MAIUSC(corrente.fonte);
+  } else { f.className = ""; f.textContent = ""; }
+  puntoAttivo(selPunto, fuoco);
+}
+function puntoAttivo(i, fuoco) {
+  const r = [...$("lista-punti").querySelectorAll(".pt")];
+  if (!r.length) { intestazione(); return; }
+  selPunto = Math.max(0, Math.min(i, r.length - 1));     // fermo agli estremi: dall'ultimo punto ▼ non torna al primo
+  r.forEach((x, j) => { x.classList.toggle("sel", j === selPunto); x.classList.toggle("fatto", j < selPunto); x.setAttribute("aria-selected", j === selPunto); });
+  [...$("prog").children].forEach((s, j) => s.classList.toggle("on", j <= selPunto));
+  const el = r[selPunto];
+  if (fuoco && document.activeElement !== el) el.focus({ preventScroll: true });
+  // Il punto attivo resta al centro, con un po' di contesto sopra e sotto; se è più alto della lista, si legge dall'inizio.
+  el.scrollIntoView({ block: el.offsetHeight > $("lista-punti").clientHeight - 20 ? "start" : "center" });
+  intestazione();
+  ricordaPosizione();
+}
+function statoP(t, tipo) { $("p-stato").textContent = t; $("p-stato").className = "stato" + (tipo ? " " + tipo : ""); }
+
+// ---------- NUOVO: dettatura dell'argomento ----------
+// Stesse letture del campo di Parla (input/change/compositionend/blur/keyup + rilettura ogni 500 ms), ma niente invio
+// automatico: ogni invio crea un elenco salvato sul Mac. Si manda solo con INVIA (o Invio nel campo).
+// La pagina non sposta né toglie mai il fuoco dal campo e non simula clic: il compositore si apre solo col gesto del Signore.
+const campo = $("tema");
+const testoCampo = () => campo.value.replace(/\s+/g, " ").trim();
+let ultimoVisto = "";
+function apriNuovo() {
+  mostra("nuovo");
+  ultimoVisto = "";
+  testoArrivato();
+}
+function ricevuto(t, avviso) { $("ricevuto").textContent = t; $("ricevuto").className = avviso ? "avv" : ""; }
+function testoArrivato() {
+  const t = testoCampo();
+  if (t === ultimoVisto) return;
+  ultimoVisto = t;
+  if (!t) { if (!$("ricevuto").classList.contains("avv")) ricevuto(""); return; }
+  if (t.length > MAX_TEMA) ricevuto("TROPPO LUNGO · MASSIMO " + MAX_TEMA + " CARATTERI", true);
+  else ricevuto("RICEVUTO: " + t + " · INVIA PER PREPARARLO");
+}
+for (const ev of ["input", "change", "compositionend", "blur", "keyup"]) campo.addEventListener(ev, testoArrivato);
+campo.addEventListener("keydown", e => { if (e.key === "Enter" && campo.value.trim()) { e.preventDefault(); invia(); } });
+setInterval(() => { if (vista === "nuovo" && testoCampo() !== ultimoVisto) testoArrivato(); }, 500);
+function invia() {
+  if (vista !== "nuovo" || occupato) return;
+  const t = testoCampo();
+  if (!t) { ricevuto("CAMPO VUOTO · SCORRA SUL CAMPO, PIZZICHI E DETTI", true); return; }
+  if (t.length > MAX_TEMA) { ricevuto("TROPPO LUNGO · MASSIMO " + MAX_TEMA + " CARATTERI", true); return; }
+  campo.value = ""; ultimoVisto = ""; ricevuto("");
+  genera(t);
+}
+$("invia").addEventListener("click", () => { if (pronto()) invia(); });
+
+// ---------- PREPARAZIONE: domanda in coda → punti → elenco aperto ----------
+// Le righe si leggono come le legge il Mac quando salva (occhiali_parla.punti_elenco): «WEB · » tolto riga per riga,
+// valgono solo le righe che iniziano con «• », «· », «- » o «* » (stessa espressione del Mac). Così l'elenco mostrato è
+// quello salvato. Se il Mac non è riuscito a salvare, l'ultima riga è «NON SALVATO NEGLI APPUNTI».
+const RE_PUNTO = /^[•·*-]\s+/;
+const NON_SALVATO = "NON SALVATO NEGLI APPUNTI";
+function leggiElenco(testo, finale) {
+  const righe = String(testo || "").replace(/\r/g, "").split("\n");
+  let nonSalvato = false;
+  while (righe.length && !righe[righe.length - 1].trim()) righe.pop();
+  if (righe.length && righe[righe.length - 1].trim().toUpperCase() === NON_SALVATO) { righe.pop(); nonSalvato = true; }
+  const web = /^\s*WEB\s*·/i.test(righe.find(r => r.trim()) || "");   // prima riga non vuota, come il Mac
+  const pulite = righe.map(r => r.trim().replace(/^WEB\s*·\s*/i, ""));
+  const punti = pulite.filter(r => RE_PUNTO.test(r)).map(r => r.replace(RE_PUNTO, "").trim()).filter(Boolean);
+  let fonte = "";
+  const ultima = pulite.filter(Boolean).pop() || "";
+  const m = ultima.match(/^Fonte\s*:\s*(.*)$/i);
+  if (m && finale) fonte = m[1].trim();
+  const altro = pulite.filter(r => r && !RE_PUNTO.test(r) && !/^Fonte\s*:/i.test(r) && !(!finale && /^(W(E(B)?)?|F(o(n(t(e)?)?)?)?)$/i.test(r)));
+  return { web, fonte, punti, altro: altro.join("\n"), nonSalvato };
+}
+function bottoniGenera(errore) { $("b-nuovo").hidden = !errore; $("b-elenchi").hidden = !errore; }
+function statoG(t, tipo) { $("g-stato").textContent = t; $("g-stato").className = "stato" + (tipo ? " " + tipo : ""); }
+function erroreG(testo, nota, stato) {
+  $("g-testo").className = "errore"; $("g-testo").textContent = testo;
+  $("g-punti").textContent = "";
+  $("g-nota").textContent = nota || "";
+  statoG(stato, "errore");
+  bottoniGenera(true);
+  vistaDa = Date.now();
+}
+function disegnaParziale(testo) {
+  const a = leggiElenco(testo, false);
+  $("g-etq").className = "etq" + (a.web ? " web" : "");
+  $("g-etq").textContent = "ELENCO IN PREPARAZIONE" + (a.web ? " · DAL WEB" : "");
+  const ul = $("g-punti");
+  ul.textContent = "";
+  $("g-testo").className = ""; $("g-testo").textContent = a.punti.length ? "" : a.altro;
+  for (const p of a.punti) { const li = document.createElement("li"); li.textContent = p; ul.appendChild(li); }
+  const c = document.createElement("span"); c.className = "cursore"; c.textContent = "▍";
+  (ul.lastElementChild || $("g-testo")).appendChild(c);
+  $("g-corpo").scrollTop = $("g-corpo").scrollHeight;
+}
+async function genera(tema) {
+  if (occupato) return null;
+  occupato = true;                         // prima di qualsiasi await: un secondo pizzico su INVIA trova la porta chiusa
+  inviato = false;
+  const mio = ++giro;
+  const titolo = tema.slice(0, TITOLO_MAX).trim();
+  const noti = new Set(elenchi.map(e => e.slug));   // per riconoscere l'elenco nuovo quando il Mac ripubblica la scheda
+  mostra("genera");
+  $("app").classList.add("pensa");
+  $("g-chiesto").textContent = tema;
+  $("g-etq").className = "etq"; $("g-etq").textContent = "ELENCO IN PREPARAZIONE";
+  $("g-testo").className = "attesa"; $("g-testo").textContent = "IN CODA PER IL MAC…";
+  $("g-punti").textContent = ""; $("g-nota").textContent = "";
+  statoG("INVIATA");
+  bottoniGenera(false);
+  // Nessun pulsante prende il fuoco durante l'attesa: il pizzico di troppo cade nel vuoto.
+  try {
+    if (!K) throw new Error("chiave assente · riaprire l'indirizzo completo");
+    let id;
+    try {
+      ({ id } = await chiamata(URL_DATI + "?domanda", { method: "POST",
+        body: JSON.stringify({ testo: tema, tipo: "elenco", parametri: { salva: true, titolo } }) }));
+    } catch (e) {
+      // Invio scaduto: la funzione può averlo ricevuto lo stesso, quindi niente nuovo invio alla cieca.
+      if (e.message === "il collegamento non risponde") e.dubbio = true;
+      throw e;
+    }
+    inviato = true;
+    if (mio !== giro) return null;
+    const inizio = Date.now();
+    let attesaDa = Date.now(), preso = false, guastoDa = 0;
+    while (Date.now() - inizio < ATTESA_MAX) {
+      await pausa(800);
+      if (mio !== giro) return null;
+      let r;
+      try { r = await chiamata(URL_DATI + "?risposta=" + id); guastoDa = 0; }
+      catch (e) {
+        if (!e.ripeti || mio !== giro) throw e;
+        if (!guastoDa) guastoDa = Date.now();
+        if (Date.now() - guastoDa > ATTESA_MAC) throw e;
+        statoG("COLLEGAMENTO INCERTO · RIPROVO");
+        continue;
+      }
+      if (mio !== giro) return null;
+      if (r.stato === "attesa") {
+        if (preso) attesaDa = Date.now();
+        if (Date.now() - attesaDa > ATTESA_MAC) throw Object.assign(new Error("il Mac non risponde"), { mac: true });
+        statoG("IN CODA · " + Math.round((Date.now() - attesaDa) / 1000) + " S");
+      } else if (r.stato === "elaborazione") {
+        preso = true;
+        $("g-testo").className = "attesa"; $("g-testo").textContent = "CONSULTO GLI SCAFFALI…";
+        statoG("JARVIS STA CERCANDO NEI LIBRI…");
+      } else if (r.stato === "scrive") {
+        preso = true;
+        disegnaParziale(r.testo);
+        statoG("JARVIS STA SCRIVENDO…");
+      } else if (r.stato === "pronta") {
+        const a = leggiElenco(r.risposta, true);
+        if (!a.punti.length) {
+          erroreG("Non ne ho ricavato un elenco, Signore.", (a.altro ? a.altro + "\n\n" : "") + "NULLA È STATO SALVATO", "NESSUN PUNTO");
+          return null;
+        }
+        corrente = { slug: null, titolo, punti: a.punti.map(t => ({ testo: t, dettaglio: "" })), web: a.web, fonte: a.fonte, provvisorio: true };
+        selPunto = 0;
+        mostra("punti");
+        disegnaPunti(true);
+        if (a.nonSalvato) statoP("NON SALVATO", "errore");   // il Mac lo dice: inutile attendere la scheda
+        else { statoP("SALVATAGGIO NEGLI APPUNTI…"); attendiSalvataggio(corrente, titolo, noti); }
+        return (a.web ? "WEB · " : "") + a.punti.map(p => "• " + p).join("\n") + (a.fonte ? "\nFonte: " + a.fonte : "");
+      }
+    }
+    throw new Error("nessuna risposta in tempo");
+  } catch (e) {
+    if (mio !== giro) return null;
+    erroreG(e.mac ? "Il Mac non risponde, Signore. È acceso, con Jarvis in funzione?" : "Collegamento non riuscito, Signore.",
+      inviato ? "LA RICHIESTA RESTA IN CODA: SE IL MAC SI RIACCENDE, L'ELENCO VERRÀ SALVATO LO STESSO"
+        : e.dubbio ? "POTREBBE ESSERE GIÀ IN CODA · CONTROLLI GLI ELENCHI" : "",
+      MAIUSC(e.message));
+    return null;
+  } finally {
+    if (mio === giro) {
+      occupato = false;
+      $("app").classList.remove("pensa");
+      if (vista === "genera" && !$("b-nuovo").hidden) $("b-nuovo").focus();
+    }
+  }
+}
+// Il Mac salva e ripubblica la scheda subito dopo la risposta (al più entro 60 s): si rilegge finché l'elenco nuovo
+// (slug mai visto, stesso titolo) compare. Nella vista PUNTI non si ridisegna nulla e il fuoco non si tocca.
+async function attendiSalvataggio(el, titolo, noti) {
+  const mio = ++salvaGiro;
+  for (const attesa of [1500, 3000, 5000, 8000, 12000, 15000, 18000]) {
+    await pausa(attesa);
+    if (mio !== salvaGiro) return;
+    await caricaElenchi();
+    if (mio !== salvaGiro) return;
+    const trovato = elenchi.find(e => !noti.has(e.slug) && e.titolo.trim() === titolo);
+    if (trovato) {
+      if (el.provvisorio) {
+        el.slug = trovato.slug; el.provvisorio = false;
+        if (corrente === el) { selChiave = trovato.slug; ricordaPosizione(); statoP("SALVATO NEGLI APPUNTI", "fatto"); }
+      }
+      return;
+    }
+  }
+  if (corrente === el && el.provvisorio) statoP("NON ANCORA NEGLI ELENCHI", "avv");
+}
+$("b-nuovo").addEventListener("click", () => { if (!occupato && pronto()) apriNuovo(); });
+$("b-elenchi").addEventListener("click", () => { if (!occupato && pronto()) tornaAgliElenchi(); });
+
+// ---------- Neural Band: ▲▼ un passo per gesto, indietro = stato precedente ----------
+function annulla() { giro++; occupato = false; $("app").classList.remove("pensa"); }
+function indietro() {
+  if (vista === "punti") tornaAgliElenchi(true);
+  else if (vista === "genera") {
+    const inCorso = occupato;
+    annulla(); apriNuovo();
+    // La richiesta è già nella coda del Mac: l'elenco sarà salvato lo stesso, un nuovo invio sarebbe un doppione.
+    if (inCorso) ricevuto("L'ELENCO RICHIESTO SARÀ SALVATO LO STESSO · LO TROVA NEGLI ELENCHI", true);
+  }
+  else if (vista === "nuovo") tornaAgliElenchi(true);
+  else history.back();
+}
+document.addEventListener("keydown", e => {
+  if (e.target === campo) return;   // nel campo comandano la dettatura e il sistema
+  const su = e.key === "ArrowUp", giu = e.key === "ArrowDown", lato = e.key === "ArrowLeft" || e.key === "ArrowRight";
+  if (e.key === "Escape" || e.key === "Backspace") { e.preventDefault(); indietro(); return; }
+  if (vista === "elenchi" && (su || giu)) { e.preventDefault(); passoElenchi(giu); }
+  else if (vista === "punti" && (su || giu || lato)) {
+    e.preventDefault();               // nessun pulsante oltre ai punti: ◀▶ non portano altrove
+    if (su || giu) puntoAttivo(selPunto + (giu ? 1 : -1), true);
+  }
+  // NUOVO: nessuna freccia intercettata, la navigazione degli occhiali porta da sola fra il campo e INVIA.
+  else if (vista === "genera") {
+    if (su || giu) { e.preventDefault(); $("g-corpo").scrollBy({ top: giu ? 110 : -110 }); }
+    else if (lato) {
+      const b = [...document.querySelectorAll("#v-genera .btn")].filter(x => !x.hidden);
+      if (!b.length) return;
+      const i = b.indexOf(document.activeElement);
+      e.preventDefault();
+      b[Math.max(0, Math.min(b.length - 1, i < 0 ? 0 : i + (e.key === "ArrowRight" ? 1 : -1)))].focus();
+    }
+  }
+});
+
+// La scheda si rilegge ogni minuto mentre si guarda la lista degli elenchi (un elenco salvato dal Mac compare da solo).
+setInterval(() => { if (vista === "elenchi" && !occupato) caricaElenchi(); }, 60000);
+
+// ---------- WebMCP: «Hey Meta, apri gli appunti della riunione» con l'app aperta ----------
+const norma = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+function trovaElenco(titolo) {
+  const q = norma(titolo);
+  if (!q) return null;
+  const voci = elenchi.map(e => ({ e, t: norma(e.titolo), s: norma(e.slug) }));
+  const esatto = voci.find(v => v.t === q || v.s === q);
+  if (esatto) return esatto.e;
+  const contiene = voci.find(v => v.t.startsWith(q)) || voci.find(v => v.t.includes(q) || q.includes(v.t));
+  if (contiene) return contiene.e;
+  const parole = q.split(" ").filter(p => p.length > 2);
+  // Parole simili: stessa radice (prefisso comune lungo almeno 4 lettere e al più 2 lettere di differenza): fornitori ≈ fornitore
+  const simili = (a, b) => { let i = 0; while (i < a.length && i < b.length && a[i] === b[i]) i++;
+    return i >= Math.min(a.length, b.length) || (i >= 4 && i >= Math.min(a.length, b.length) - 2); };
+  let meglio = null, punti = 0;
+  for (const v of voci) {
+    const n = parole.filter(p => v.t.split(" ").some(w => w.length > 2 && simili(p, w))).length;
+    if (n > punti) { meglio = v.e; punti = n; }
+  }
+  return meglio;
+}
+(function registraStrumenti() {
+  const mc = document.modelContext;
+  if (!mc || typeof mc.registerTool !== "function") return;
+  try {
+    mc.registerTool({
+      name: "apri_appunti",
+      description: "Apre sugli occhiali un elenco di appunti di Raffaele (scaletta per riunioni o presentazioni), cercandolo per titolo anche approssimato, e restituisce i punti. Use when the user says 'apri gli appunti di…', 'mostrami la scaletta', 'fammi vedere i punti per la riunione'.",
+      inputSchema: { type: "object", properties: {
+        titolo: { type: "string", description: "titolo dell'elenco, anche parziale (es. 'riunione fornitore')" },
+      }, required: ["titolo"] },
+      execute: async (input) => {
+        await caricaElenchi();
+        const el = trovaElenco(input && input.titolo);
+        if (!el) return elenchi.length ? "Non trovo un elenco con questo titolo, Signore. Ci sono: " + elenchi.map(e => e.titolo).join(", ") + "."
+          : "Non c'è ancora nessun elenco negli appunti, Signore.";
+        if (occupato) return "Un momento, Signore: sto preparando un elenco nuovo.";
+        apriElenco(el);
+        return el.titolo + ":\n" + el.punti.map((p, i) => (i + 1) + ". " + p.testo + (p.dettaglio ? " (" + p.dettaglio + ")" : "")).join("\n");
+      },
+    });
+  } catch (e) {}
+})();
+
+disegnaElenchi(true);
+caricaElenchi();
+JarvisSaluto({ app: "appunti", chiave: K, url: URL_DATI, sotto: "APPUNTI · UN PUNTO PER GESTO", frasi: [
+  { audio: "appunti-1", scritta: "Appunti a portata d'occhio, Signore. Lei parla, io ricordo i punti. Nessuno noterà la differenza." },
+  { audio: "appunti-2", scritta: "Scaletta in linea, Signore. Se perde il filo, lo tengo io." },
+  { audio: "appunti-3", scritta: "Elenco pronto, Signore. Un punto alla volta: l'improvvisazione la lasciamo ai dilettanti." },
+] });
+</script>
+</body>
+</html>
