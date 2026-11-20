@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "name": "Studio",
+  "description": "Preparazione agli esami: Jarvis interroga dai libri del corso, Raffaele risponde a voce, Jarvis dà il voto e dice cosa manca.",
+  "appearance": {
+    "theme_color": "#3FD4FF",
+    "icon": {
+      "src": "../icona-jarvis.svg"
+    }
+  }
+}
