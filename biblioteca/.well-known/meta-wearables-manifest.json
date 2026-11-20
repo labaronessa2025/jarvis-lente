@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "name": "Biblioteca",
+  "description": "Domande ai libri di Raffaele: risposte con la fonte, dal web solo se il libro non basta.",
+  "appearance": {
+    "theme_color": "#3FD4FF",
+    "icon": {
+      "src": "../icona-jarvis.svg"
+    }
+  }
+}
