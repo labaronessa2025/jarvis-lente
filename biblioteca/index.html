@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Biblioteca di Jarvis: domande ai libri di Raffaele, con la fonte.">
+<title>Biblioteca</title>
+<style>
+  /* HUD di Jarvis (20/11/2026): nero = trasparente sulla lente, ciano che brilla, ambra per il web e gli avvisi. 600×600.
+     Quattro stati: RACCOLTE → CHIEDI → RISPOSTA (o ELENCO). Il testo della risposta è grande e pieno: si legge anche col sole. */
+  :root {
+    --ciano:#3fd4ff; --ciano-t:#3fd4ff55; --ciano-f:#3fd4ff1f; --testo:#f2fbff; --tenue:#8fb3c4; --ambra:#ffb340; --rosso:#ff5a4e; --verde:#5ef0a8;
+    --mono:"SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    --sans:"SF Pro Display", -apple-system, "Roboto", "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; color:var(--testo); font:20px/1.3 var(--sans); }
+  #app { position:relative; display:flex; flex-direction:column; height:100%; padding:20px 26px 18px; }
+  /* Angoli da mirino */
+  #app::before, #app::after { content:""; position:absolute; width:30px; height:30px; border:2px solid var(--ciano); opacity:.75; pointer-events:none; }
+  #app::before { top:6px; left:6px; border-right:0; border-bottom:0; }
+  #app::after { bottom:6px; right:6px; border-left:0; border-top:0; }
+
+  header { display:flex; align-items:center; gap:12px; padding-bottom:11px; position:relative;
+    font:600 14px/1.2 var(--mono); letter-spacing:3px; color:var(--tenue); }
+  header::after { content:""; position:absolute; left:0; right:0; bottom:0; height:1px; background:linear-gradient(90deg,var(--ciano),var(--ciano-t) 40%,transparent); }
+  /* Linea che scorre sotto l'intestazione mentre Jarvis lavora */
+  header::before { content:""; position:absolute; bottom:-1px; left:0; width:90px; height:2px; background:var(--ciano); box-shadow:0 0 10px var(--ciano);
+    opacity:0; }
+  .pensa header::before { opacity:1; animation:scansione 1.4s cubic-bezier(.6,0,.4,1) infinite alternate; }
+  @keyframes scansione { from { left:0; } to { left:calc(100% - 90px); } }
+  .reattore { width:30px; height:30px; flex:none; }
+  .reattore .anello { transform-origin:50% 50%; animation:gira 10s linear infinite; }
+  .pensa .reattore .anello { animation-duration:1.4s; }
+  @keyframes gira { to { transform:rotate(360deg); } }
+  #raccolta-nome { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #raccolta-nome b { color:var(--ciano); font-weight:700; text-shadow:0 0 8px var(--ciano-t); }
+  #raccolta-libri { flex:none; color:var(--testo); }
+
+  .vista { display:none; flex:1; min-height:0; flex-direction:column; padding-top:16px; animation:entra .45s cubic-bezier(.6,0,.4,1); }
+  .vista.attiva { display:flex; }
+  @keyframes entra { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+  .etq { font:600 14px/1.2 var(--mono); letter-spacing:4px; color:var(--tenue); margin-bottom:10px; display:flex; align-items:center; gap:10px; }
+  .etq::after { content:""; flex:1; height:1px; background:linear-gradient(90deg,var(--ciano-f),transparent); }
+  .etq.web { color:var(--ambra); }
+  .etq.errore { color:var(--rosso); }
+
+  /* RACCOLTE: una riga per gesto, la riga scelta si espande */
+  #lista { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; padding:2px 2px 8px; }
+  #lista::-webkit-scrollbar { display:none; }
+  .riga { display:block; width:100%; text-align:left; margin:7px 0; padding:11px 16px 11px 44px; position:relative; cursor:pointer;
+    background:transparent; border:1px solid transparent; border-radius:10px; color:#a9c6d3; font:600 24px/1.25 var(--sans);
+    transition:background .3s, border-color .3s, color .3s, box-shadow .3s; }
+  .riga::before { content:""; position:absolute; left:17px; top:21px; width:9px; height:9px; background:var(--tenue); transform:rotate(45deg); transition:background .3s, box-shadow .3s; }
+  .riga .dett { display:none; margin-top:7px; font:600 15px/1.45 var(--mono); letter-spacing:2px; color:var(--tenue); }
+  .riga .ocr { display:none; margin-top:6px; font:600 15px/1.4 var(--mono); letter-spacing:1px; color:var(--ambra); }
+  .riga.sel { color:var(--testo); font-size:30px; font-weight:700; border-color:var(--ciano); background:#3fd4ff14;
+    box-shadow:0 0 18px #3fd4ff33, inset 0 0 22px #3fd4ff10; }
+  .riga.sel::before { background:var(--ciano); box-shadow:0 0 8px var(--ciano); top:25px; }
+  .riga.sel .dett, .riga.sel .ocr { display:block; }
+  .riga:focus { outline:none; }
+  .riga .ocr-mini { font:700 13px/1 var(--mono); letter-spacing:2px; color:var(--ambra); margin-left:10px; vertical-align:4px; }
+  .riga.sel .ocr-mini { display:none; }
+  #avviso-raccolte { font:600 15px/1.4 var(--mono); letter-spacing:1px; color:var(--ambra); min-height:0; }
+
+  /* CHIEDI */
+  .invito { font:700 30px/1.2 var(--sans); color:var(--testo); margin:6px 0 20px; }
+  .invito em { font-style:normal; color:var(--ciano); text-shadow:0 0 12px var(--ciano-t); }
+  .riga-domanda { display:flex; gap:10px; align-items:stretch; }
+  #domanda { flex:1; min-width:0; font:600 22px/1.3 var(--sans); color:var(--testo); background:transparent; border:1px solid var(--ciano-t);
+    padding:15px 16px; border-radius:0; clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px); }
+  #domanda::placeholder { color:var(--ciano); opacity:.9; }
+  #domanda:focus { outline:none; border:2px solid var(--ciano); box-shadow:0 0 16px var(--ciano-t), 0 0 10px var(--ciano-f) inset; }
+  #invia { flex:none; font:700 17px/1 var(--mono); letter-spacing:2px; color:#00141c; background:var(--ciano); border:0; padding:0 18px; cursor:pointer;
+    clip-path:polygon(9px 0,100% 0,calc(100% - 9px) 100%,0 100%); box-shadow:0 0 18px #3fd4ff88; }
+  #invia:focus { outline:3px solid var(--testo); outline-offset:2px; }
+  #invia.spento { background:#1a2a30; color:var(--tenue); box-shadow:none; }
+  #ricevuto { font:600 15px/1.4 var(--mono); color:var(--verde); letter-spacing:1px; margin-top:12px; min-height:21px; }
+  #ricevuto.vuoto { color:var(--ambra); }
+  .guida { margin-top:auto; font:600 14px/1.6 var(--mono); letter-spacing:2px; color:var(--tenue); }
+
+  /* RISPOSTA / ELENCO */
+  #chiesto { font:600 18px/1.3 var(--sans); color:var(--tenue); margin-bottom:12px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  #chiesto::before { content:"› "; color:var(--ciano); }
+  #corpo { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; padding-right:4px; }
+  #corpo::-webkit-scrollbar { display:none; }
+  #testo { font:600 25px/1.38 var(--sans); color:var(--testo); white-space:pre-line; }
+  #testo.attesa { font:600 17px/1.5 var(--mono); letter-spacing:2px; color:var(--tenue); }
+  #testo.errore { color:var(--ambra); }
+  .cursore { display:inline-block; width:.5em; color:var(--ciano); animation:lampeggia 1s steps(2) infinite; }
+  @keyframes lampeggia { 50% { opacity:0; } }
+  #punti { list-style:none; }
+  #punti li { position:relative; padding:9px 12px 9px 38px; margin:4px 0; border:1px solid transparent; border-radius:10px;
+    font:600 22px/1.3 var(--sans); color:#b9d3de; transition:background .3s, border-color .3s, color .3s; }
+  #punti li::before { content:""; position:absolute; left:15px; top:20px; width:8px; height:8px; background:var(--ciano); transform:rotate(45deg); box-shadow:0 0 6px var(--ciano); }
+  #punti li.sel { color:var(--testo); font-size:26px; font-weight:700; border-color:var(--ciano); background:#3fd4ff12; box-shadow:0 0 16px #3fd4ff2e; }
+  #punti li.sel::before { top:23px; }
+  #fonte { display:none; margin-top:14px; align-self:flex-start; max-width:100%; font:700 14px/1.35 var(--mono); letter-spacing:2px; color:var(--ciano);
+    border:1px solid #3fd4ff77; padding:7px 11px; border-radius:6px; box-shadow:0 0 12px #3fd4ff22; }
+  #fonte.visibile { display:inline-block; }
+  #fonte.web { color:var(--ambra); border-color:#ffb34099; box-shadow:0 0 12px #ffb34026; }
+  #stato { font:600 14px/1.2 var(--mono); letter-spacing:3px; color:var(--ciano); margin-top:10px; min-height:17px; }
+  #stato.errore { color:var(--rosso); }
+  #stato.fatto { color:var(--verde); }
+  #stato.avv { color:var(--ambra); }
+  .bottoni { display:flex; gap:10px; margin-top:12px; }
+  .btn { flex:1; font:700 16px/1 var(--mono); letter-spacing:3px; padding:15px 0; border:1px solid #3fd4ff66; border-radius:10px;
+    color:var(--ciano); background:transparent; cursor:pointer; transition:background .25s, color .25s, box-shadow .25s; }
+  .btn:focus { outline:none; background:var(--ciano); color:#00141c; box-shadow:0 0 20px #3fd4ff88; }
+  .btn.spento { opacity:.35; }
+  .btn[hidden] { display:none; }
+  @media (prefers-reduced-motion:reduce) { .anello, .vista, header::before { animation:none !important; } }
+  @media (max-width:420px) { html, body { font-size:17px; } #app { padding:14px; } #testo { font-size:21px; } .riga { font-size:20px; } }
+</style>
+<script src="../comune/saluto.js"></script>
+</head>
+<body>
+<div id="app">
+  <header>
+    <svg class="reattore" viewBox="0 0 30 30" aria-hidden="true">
+      <circle cx="15" cy="15" r="13" fill="none" stroke="#3fd4ff" stroke-width="2" style="filter:drop-shadow(0 0 3px #3fd4ff)"/>
+      <circle class="anello" cx="15" cy="15" r="9" fill="none" stroke="#3fd4ffaa" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <circle cx="15" cy="15" r="5" fill="#3fd4ff"/>
+    </svg>
+    <span id="raccolta-nome">BIBLIOTECA</span>
+    <span id="raccolta-libri"></span>
+  </header>
+
+  <section id="v-raccolte" class="vista attiva" aria-label="Raccolte">
+    <div class="etq">RACCOLTE · SCELGA</div>
+    <div id="lista" role="listbox" aria-label="Raccolte di libri"></div>
+    <div id="avviso-raccolte"></div>
+  </section>
+
+  <section id="v-chiedi" class="vista" aria-label="Domanda">
+    <div class="etq">DOMANDA</div>
+    <div class="invito">Cosa cerchiamo nei <em>libri</em>, Signore?</div>
+    <div class="riga-domanda">
+      <input id="domanda" type="text" autocomplete="off" placeholder="● Pizzichi qui e detti" aria-label="Domanda per la biblioteca">
+      <button id="invia" type="button">INVIA ▶</button>
+    </div>
+    <div id="ricevuto"></div>
+    <div class="guida">RISPONDO DAI LIBRI CON LA FONTE<br>SE NON BASTANO, DAL WEB · <span style="color:var(--ambra)">WEB</span><br>INDIETRO = RACCOLTE</div>
+  </section>
+
+  <section id="v-risposta" class="vista" aria-label="Risposta">
+    <div id="chiesto"></div>
+    <div id="etq-risposta" class="etq">RISPOSTA</div>
+    <div id="corpo">
+      <div id="testo"></div>
+      <ul id="punti" hidden></ul>
+    </div>
+    <span id="fonte"></span>
+    <div id="stato"></div>
+    <div class="bottoni">
+      <button id="b-elenco" class="btn" type="button">ELENCO</button>
+      <button id="b-salva" class="btn" type="button">SALVA</button>
+      <button id="b-voce" class="btn" type="button" hidden>▶ VOCE</button>
+      <button id="b-chiedi" class="btn" type="button">CHIEDI</button>
+    </div>
+  </section>
+</div>
+<script>
+"use strict";
+// Biblioteca: le domande vanno nella coda di jarvis-lente con tipo «biblioteca» o «elenco»; Jarvis sul Mac risponde dai libri
+// (riga finale «Fonte: …») o dal web (inizio «WEB · »). Le raccolte arrivano dalla scheda «biblioteca» pubblicata dal Mac.
+const PRODUZIONE = "https://wbcszvjszruatmpigncd.supabase.co/functions/v1/jarvis-lente";
+// Solo per le prove sul Mac: ?api=http://127.0.0.1:PORTA (o localhost). Qualsiasi altro indirizzo si ignora.
+const API_PROVA = (() => {
+  const a = new URLSearchParams(location.search).get("api");
+  if (!a) return "";
+  try {
+    const u = new URL(a);
+    if (u.protocol === "http:" && (u.hostname === "127.0.0.1" || u.hostname === "localhost")) return u.origin;
+  } catch (e) {}
+  return "";
+})();
+const URL_DATI = API_PROVA ? API_PROVA + "/functions/v1/jarvis-lente" : PRODUZIONE;
+const ATTESA_MAC = 30000;     // in «attesa» (nessuno l'ha presa) oltre 30 s: il Mac non risponde
+const ATTESA_MAX = 150000;    // tetto complessivo una volta che il Mac l'ha presa
+const TITOLO_MAX = 40;
+const TEMPO_LETTURA = 10000;  // ogni lettura (scheda, stato, voce) si abbandona dopo 10 s: niente richieste appese
+const TEMPO_INVIO = 15000;    // l'invio della domanda dopo 15 s
+const MAX_PARAMETRI = 2000;   // la funzione accetta parametri fino a 2048 byte (UTF-8 del JSON): margine di sicurezza
+const MAX_DA_TESTO = 1500;    // caratteri della risposta mostrata mandati per farne un elenco
+const NON_SALVATO = "NON SALVATO NEGLI APPUNTI";   // ultima riga del Mac quando il salvataggio non è riuscito
+
+// Chiave «domande»: arriva una volta nell'indirizzo (#k=… o ?k=…, l'app Meta AI può scartare la parte dopo #) e resta sugli occhiali.
+const K = (() => {
+  const m = (location.hash + "&" + location.search).match(/(?:^|[#?&])k=([\w-]{20,})/);
+  if (m) {
+    try { localStorage.setItem("biblioteca-k", m[1]); } catch (e) {}
+    history.replaceState(null, "", location.pathname + (API_PROVA ? "?api=" + encodeURIComponent(API_PROVA) : ""));
+    return m[1];
+  }
+  try { return localStorage.getItem("biblioteca-k") || ""; } catch (e) { return ""; }
+})();
+
+const $ = id => document.getElementById(id);
+const pausa = ms => new Promise(r => setTimeout(r, ms));
+const MAIUSC = s => String(s ?? "").toUpperCase();
+
+let vista = "raccolte";
+let raccolte = [], selRiga = 0;
+let raccolta = null;            // null = tutte
+let occupato = false, giro = 0, inviataAlle = 0; // giro: ogni domanda nuova o «indietro» invalida l'attesa precedente
+let ultimaDomanda = "", formato = "risposta", salvato = false, ultimaVoce = null, selPunto = 0;
+let mostrata = null;            // la risposta finita sullo schermo {testo, web, fonte, punti}: ELENCO e SALVA partono da qui
+let salvaGiro = 0;              // attesa della conferma del salvataggio (scheda appunti)
+
+// ---------- Viste ----------
+function mostra(v) {
+  vista = v;
+  for (const s of document.querySelectorAll(".vista")) s.classList.toggle("attiva", s.id === "v-" + v);
+  if (v === "chiedi") { ultimoInviato = ""; ultimoVisto = $("domanda").value.trim(); $("ricevuto").textContent = ""; }
+}
+function intestazione(r = raccolta) {
+  if (r === null || vista === "raccolte") {
+    const tot = raccolte.reduce((n, r) => n + (+r.libri || 0), 0);
+    $("raccolta-nome").innerHTML = vista === "raccolte" ? "BIBLIOTECA" : "RACCOLTA <b>TUTTE</b>";
+    $("raccolta-libri").textContent = raccolte.length ? tot + (tot === 1 ? " LIBRO" : " LIBRI") : "";
+  } else {
+    $("raccolta-nome").innerHTML = "RACCOLTA <b></b>";
+    $("raccolta-nome").querySelector("b").textContent = MAIUSC(r.nome);
+    const n = +r.libri || 0;
+    $("raccolta-libri").textContent = n + (n === 1 ? " LIBRO" : " LIBRI");
+  }
+}
+
+// ---------- Rete ----------
+// Ogni chiamata ha un tempo massimo (AbortController), corpo compreso: una richiesta appesa non blocca l'attesa dei 30 s.
+// Gli errori di rete, i tempi scaduti e i 5xx portano `ripeti`: durante l'attesa si riprova, l'invio invece mai.
+async function chiamata(url, opzioni = {}, come = "json") {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), opzioni.method === "POST" ? TEMPO_INVIO : TEMPO_LETTURA);
+  try {
+    const r = await fetch(url, { ...opzioni, signal: ctl.signal, cache: "no-store",
+      headers: { "x-lente-key": K, "content-type": "application/json", ...(opzioni.headers || {}) } });
+    if (r.status === 401) throw new Error("chiave non valida");
+    if (r.status === 429) throw new Error("troppe domande: riprovi tra poco");
+    if (!r.ok) throw Object.assign(new Error("errore " + r.status), { ripeti: r.status >= 500 });
+    return come === "blob" ? await r.blob() : await r.json();
+  } catch (e) {
+    if (e && e.name === "AbortError") throw Object.assign(new Error("il collegamento non risponde"), { ripeti: true });
+    if (e instanceof TypeError) throw Object.assign(new Error("collegamento assente"), { ripeti: true });
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ---------- RACCOLTE ----------
+const senzaTesto = r => Array.isArray(r.senza_testo) ? r.senza_testo.map(p => String(p).split("/").pop())
+  : (+r.senza_testo > 0 ? [+r.senza_testo + (+r.senza_testo === 1 ? " libro" : " libri")] : []);
+
+function disegnaRaccolte() {
+  const lista = $("lista");
+  lista.textContent = "";
+  const voci = [{ nome: "Tutte", tutte: true, libri: raccolte.reduce((n, r) => n + (+r.libri || 0), 0),
+    pezzi: raccolte.reduce((n, r) => n + (+r.pezzi || 0), 0), senza_testo: [] }, ...raccolte];
+  voci.forEach((r, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "riga"; b.setAttribute("role", "option");
+    b.appendChild(document.createTextNode(r.tutte ? "Tutte le raccolte" : r.nome));
+    const ocr = senzaTesto(r);
+    if (ocr.length) { const m = document.createElement("span"); m.className = "ocr-mini"; m.textContent = "OCR"; b.appendChild(m); }
+    const d = document.createElement("div"); d.className = "dett";
+    d.textContent = `${+r.libri || 0} ${+r.libri === 1 ? "LIBRO" : "LIBRI"} · ${+r.pezzi || 0} PASSAGGI`;
+    b.appendChild(d);
+    if (ocr.length) {
+      const o = document.createElement("div"); o.className = "ocr";
+      o.textContent = "SERVE OCR · " + ocr.join(", ");
+      b.appendChild(o);
+    }
+    b.addEventListener("click", () => scegliRaccolta(r.tutte ? null : r));
+    b.addEventListener("focus", () => seleziona(i, false));
+    lista.appendChild(b);
+  });
+  seleziona(Math.min(selRiga, voci.length - 1), vista === "raccolte");
+}
+function seleziona(i, fuoco) {
+  const righe = $("lista").children;
+  if (!righe.length) return;
+  selRiga = Math.max(0, Math.min(i, righe.length - 1));
+  [...righe].forEach((r, j) => { r.classList.toggle("sel", j === selRiga); r.setAttribute("aria-selected", j === selRiga); });
+  const r = righe[selRiga];
+  if (fuoco && document.activeElement !== r) r.focus({ preventScroll: true });
+  r.scrollIntoView({ block: "nearest" });
+}
+async function caricaRaccolte() {
+  $("avviso-raccolte").textContent = "";
+  try {
+    if (!K) throw new Error("chiave assente · riaprire l'indirizzo completo");
+    const j = await chiamata(URL_DATI + "?scheda=biblioteca");
+    const d = j && j.dati;
+    raccolte = d && Array.isArray(d.raccolte) ? d.raccolte.filter(r => r && r.nome) : [];
+    if (d && d.errore) $("avviso-raccolte").textContent = "MAC: " + MAIUSC(d.errore) + " · RESTA «TUTTE»";
+    else if (!d) $("avviso-raccolte").textContent = "SCHEDA NON ANCORA PUBBLICATA DAL MAC";
+    else if (!raccolte.length) $("avviso-raccolte").textContent = "NESSUNA RACCOLTA · RISPONDERÀ IL WEB";
+  } catch (e) {
+    $("avviso-raccolte").textContent = MAIUSC(e.message) + " · RESTA «TUTTE»";
+  }
+  if (raccolta) raccolta = raccolte.find(r => r.nome === raccolta.nome) || raccolta;
+  disegnaRaccolte();
+  intestazione();
+}
+function scegliRaccolta(r) {
+  raccolta = r;
+  mostra("chiedi");
+  intestazione();
+  // Nessun fuoco automatico sul campo: la dettatura si apre solo se è il Signore a selezionarlo e a pizzicarlo.
+}
+
+// ---------- Risposta: fonte, web, punti ----------
+const RE_WEB = /^\s*WEB\s*·\s*/i;
+// Stessa regola del Mac (occhiali_parla.RE_PUNTO): un punto inizia con «• », «· », «- » o «* » (tolto «WEB · »).
+const RE_PUNTO = /^[•·*-]\s+/;
+function analizza(testo, finale) {
+  let t = String(testo || "").replace(/\r/g, "").trim();
+  let web = false, fonte = "", nonSalvato = false;
+  const marca = t.split("\n");
+  if (marca.length && marca[marca.length - 1].trim().toUpperCase() === NON_SALVATO) { marca.pop(); nonSalvato = true; t = marca.join("\n").trim(); }
+  if (RE_WEB.test(t)) { web = true; t = t.replace(RE_WEB, ""); }
+  else if (!finale && /^\s*W(E(B(\s*·?)?)?)?\s*$/i.test(t)) t = "";   // prefisso «WEB · » che sta ancora arrivando
+  let righe = t.split("\n");
+  // La riga della fonte è l'ultima; mentre arriva si nasconde anche a metà («Fo», «Fonte: Tar…»).
+  for (let i = righe.length - 1; i >= 0; i--) {
+    const r = righe[i].trim();
+    if (!r) continue;
+    const m = r.match(/^Fonte\s*:\s*(.*)$/i);
+    if (m) { if (finale) fonte = m[1].trim(); righe.splice(i, 1); }
+    else if (!finale && /^F(o(n(t(e)?)?)?)?$/i.test(r)) righe.splice(i, 1);
+    break;
+  }
+  righe = righe.map(r => r.trim()).filter(Boolean);
+  const punti = righe.filter(r => RE_PUNTO.test(r)).map(r => r.replace(RE_PUNTO, "").trim()).filter(Boolean);
+  const altro = righe.filter(r => !RE_PUNTO.test(r));
+  return { web, fonte, punti, testo: righe.join("\n"), intro: altro.join("\n"), nonSalvato };
+}
+
+function disegnaRisposta(testo, finale) {
+  const a = analizza(testo, finale);
+  const elenco = formato === "elenco" && a.punti.length > 0;
+  const t = $("testo"), ul = $("punti");
+  t.className = "";
+  if (elenco) {
+    t.textContent = a.intro;
+    t.hidden = !a.intro;
+    ul.hidden = false;
+    ul.textContent = "";
+    for (const p of a.punti) { const li = document.createElement("li"); li.textContent = p; ul.appendChild(li); }
+    selezionaPunto(selPunto);
+  } else {
+    ul.hidden = true; t.hidden = false;
+    t.textContent = a.testo;
+  }
+  if (finale) $("corpo").scrollTop = 0;   // a risposta finita si legge dall'inizio; ▲▼ scorrono
+  else {
+    const c = document.createElement("span"); c.className = "cursore"; c.textContent = "▍";
+    (elenco ? ul.lastElementChild || t : t).appendChild(c);
+    $("corpo").scrollTop = $("corpo").scrollHeight;
+  }
+  const etq = $("etq-risposta");
+  etq.className = "etq" + (a.web ? " web" : "");
+  etq.textContent = (formato === "elenco" ? "ELENCO" : "RISPOSTA") + (a.web ? " · DAL WEB" : finale && a.fonte ? " · DAL LIBRO" : "");
+  const f = $("fonte");
+  if (finale && (a.web || a.fonte)) {
+    f.className = "visibile" + (a.web ? " web" : "");
+    f.textContent = a.web ? (a.fonte ? "WEB · " + MAIUSC(a.fonte) : "WEB · FUORI DAI LIBRI") : "FONTE · " + MAIUSC(a.fonte);
+  } else f.className = "";
+  return a;
+}
+function selezionaPunto(i) {
+  const li = $("punti").children;
+  if (!li.length) return;
+  selPunto = Math.max(0, Math.min(i, li.length - 1));
+  [...li].forEach((x, j) => x.classList.toggle("sel", j === selPunto));
+  li[selPunto].scrollIntoView({ block: "nearest" });
+}
+function stato(testo, tipo) { const s = $("stato"); s.textContent = testo; s.className = tipo || ""; }
+function aggiornaBottoni() {
+  $("b-elenco").hidden = formato === "elenco";
+  $("b-elenco").classList.toggle("spento", occupato);
+  $("b-salva").classList.toggle("spento", occupato || salvato || !mostrata);
+  $("b-chiedi").classList.toggle("spento", false);
+  $("invia").classList.toggle("spento", occupato);
+  $("invia").setAttribute("aria-disabled", occupato);
+}
+
+// ---------- Domanda → coda → risposta (un solo punto d'ingresso: INVIA, dettatura, ELENCO, SALVA, WebMCP) ----------
+async function chiedi(domanda, opz = {}) {
+  domanda = String(domanda || "").trim();
+  if (!domanda || occupato) return null;   // niente domande vuote, niente doppioni mentre una è in corso
+  occupato = true;                         // prima di qualsiasi await: un secondo pizzico trova già la porta chiusa
+  const mio = ++giro;
+  salvaGiro++;                             // una conferma di salvataggio ancora in attesa non scrive più nello stato
+  formato = opz.elenco ? "elenco" : "risposta";
+  salvato = opz.salva === true;            // SALVA resta spento finché il salvataggio non fallisce in modo certo
+  mostrata = null;
+  let inviato = false;
+  const titolo = titoloDi(domanda);
+  ultimaDomanda = domanda;
+  const racc = "raccolta" in opz ? opz.raccolta : raccolta;   // WebMCP con raccolta sconosciuta: «tutte» solo per questa domanda
+  ultimaVoce = null; $("b-voce").hidden = true;
+  $("app").classList.add("pensa");
+  mostra("risposta");
+  intestazione(racc);
+  $("chiesto").textContent = domanda;
+  $("punti").textContent = ""; $("punti").hidden = true; $("testo").hidden = false; selPunto = 0;
+  $("testo").className = "attesa"; $("testo").textContent = "IN CODA PER IL MAC…";
+  $("fonte").className = "";
+  $("etq-risposta").className = "etq"; $("etq-risposta").textContent = formato === "elenco" ? "ELENCO" : "RISPOSTA";
+  stato(opz.salva ? "PREPARO L'ELENCO DA SALVARE…" : opz.daTesto ? "TRASFORMO LA RISPOSTA IN ELENCO…" : "INVIATA");
+  aggiornaBottoni();
+  // Nessun pulsante prende il fuoco durante l'attesa: un secondo pizzico su INVIA (ormai nascosto) cade nel vuoto
+  // invece di premere CHIEDI e annullare la domanda appena partita. Il fuoco arriva su un pulsante a risposta pronta.
+  inviataAlle = Date.now();
+  try {
+    if (!K) throw new Error("chiave assente · riaprire l'indirizzo completo");
+    const parametri = {};
+    if (racc) parametri.raccolta = racc.nome;
+    // ELENCO: il Mac trasforma la risposta mostrata (niente nuova ricerca) e ne tiene la provenienza
+    if (opz.daTesto) { parametri.da_testo = opz.daTesto; parametri.web = opz.web === true; if (opz.fonte) parametri.fonte = opz.fonte; }
+    if (opz.salva) { parametri.salva = true; parametri.titolo = titolo; }
+    const noti = opz.salva ? await slugAppunti() : null;
+    if (mio !== giro) return null;
+    const { id } = await chiamata(URL_DATI + "?domanda", { method: "POST",
+      body: JSON.stringify({ testo: domanda, tipo: formato === "elenco" ? "elenco" : "biblioteca", parametri: entro(parametri) }) });
+    inviato = true;
+    if (mio !== giro) return null;
+    const inizio = Date.now();
+    let attesaDa = Date.now(), preso = false, guastoDa = 0;
+    while (Date.now() - inizio < ATTESA_MAX) {
+      await pausa(800);
+      if (mio !== giro) return null;
+      let r;
+      try { r = await chiamata(URL_DATI + "?risposta=" + id); guastoDa = 0; }
+      catch (e) {
+        // Lettura scaduta o rete assente: si riprova, ma non oltre 30 s di fila
+        if (!e.ripeti || mio !== giro) throw e;
+        if (!guastoDa) guastoDa = Date.now();
+        if (Date.now() - guastoDa > ATTESA_MAC) throw e;
+        stato("COLLEGAMENTO INCERTO · RIPROVO");
+        continue;
+      }
+      if (mio !== giro) return null;
+      if (r.stato === "attesa") {
+        if (preso) attesaDa = Date.now();
+        if (Date.now() - attesaDa > ATTESA_MAC) {
+          $("testo").className = "errore"; $("testo").textContent = "Il Mac non risponde, Signore. È acceso, con Jarvis in funzione?";
+          stato("IL MAC NON RISPONDE", "errore");
+          return null;
+        }
+        stato("IN CODA · " + Math.round((Date.now() - attesaDa) / 1000) + " S");
+      } else if (r.stato === "elaborazione") {
+        preso = true;
+        $("testo").className = "attesa"; $("testo").textContent = "CONSULTO GLI SCAFFALI…";
+        stato("JARVIS STA CERCANDO NEI LIBRI…");
+      } else if (r.stato === "scrive") {
+        preso = true;
+        disegnaRisposta(r.testo, false);
+        stato("JARVIS STA SCRIVENDO…");
+      } else if (r.stato === "pronta") {
+        const a = disegnaRisposta(r.risposta, true);
+        mostrata = { testo: a.testo, web: a.web, fonte: a.fonte, punti: formato === "elenco" ? a.punti : [] };
+        if (opz.salva) esitoSalvataggio(a, titolo, noti);
+        else if (formato === "elenco") stato(a.punti.length ? "ELENCO PRONTO" : "NESSUN PUNTO");   // niente voce per gli elenchi
+        else { stato(r.audio ? "RISPOSTA RICEVUTA" : "RISPOSTA RICEVUTA · VOCE IN ARRIVO"); aspettaVoce(id, r.audio, mio); }
+        return (a.web ? "WEB · " : "") + (a.punti.length && formato === "elenco" ? a.punti.map(p => "• " + p).join("\n") : a.testo)
+          + (a.fonte ? "\nFonte: " + a.fonte : "");
+      }
+    }
+    throw new Error("nessuna risposta in tempo");
+  } catch (e) {
+    if (mio !== giro) return null;
+    if (opz.salva && !inviato && e.message !== "il collegamento non risponde") salvato = false;   // mai partito: si può riprovare
+    $("testo").className = "errore"; $("testo").textContent = "Collegamento non riuscito, Signore.";
+    stato(MAIUSC(e.message), "errore");
+    return null;
+  } finally {
+    if (mio === giro) {
+      occupato = false;
+      $("app").classList.remove("pensa");
+      aggiornaBottoni();
+      const att = document.activeElement;
+      if (vista === "risposta" && (!$("v-risposta").contains(att) || att.classList.contains("spento"))) {
+        const errore = $("testo").classList.contains("errore");
+        (errore || (formato === "elenco" && salvato) ? $("b-chiedi") : formato === "elenco" ? $("b-salva") : $("b-elenco")).focus();
+      }
+    }
+  }
+}
+
+// ---------- Salvataggio negli Appunti: confermato solo quando l'elenco compare nella scheda «appunti» (come in Appunti) ----------
+const titoloDi = d => String(d || "").trim().slice(0, TITOLO_MAX).trim();   // come lo salva il Mac (spazi tolti)
+// Parametri entro i 2 KB della funzione (byte UTF-8 del JSON): si accorcia il testo da trasformare, poi i punti.
+function entro(p) {
+  const peso = () => new TextEncoder().encode(JSON.stringify(p)).length;
+  if (typeof p.da_testo === "string") {
+    p.da_testo = p.da_testo.slice(0, MAX_DA_TESTO);
+    while (peso() > MAX_PARAMETRI && p.da_testo.length > 50) p.da_testo = p.da_testo.slice(0, Math.floor(p.da_testo.length * 0.9));
+  }
+  if (Array.isArray(p.punti)) {
+    if (peso() > MAX_PARAMETRI) p.punti = p.punti.map(x => x.slice(0, 160));
+    while (peso() > MAX_PARAMETRI && p.punti.length > 1) p.punti.pop();
+  }
+  if (peso() > MAX_PARAMETRI && p.fonte) p.fonte = p.fonte.slice(0, 80);
+  return p;
+}
+// Gli elenchi già negli Appunti prima dell'invio: quello nuovo sarà uno slug mai visto con lo stesso titolo.
+async function slugAppunti() {
+  try {
+    const j = await chiamata(URL_DATI + "?scheda=appunti");
+    const el = j && j.dati && Array.isArray(j.dati.elenchi) ? j.dati.elenchi : [];
+    return new Set(el.map(e => e && e.slug));
+  } catch (e) { return new Set(); }
+}
+function esitoSalvataggio(a, titolo, noti) {
+  if (a.nonSalvato || !a.punti.length) {           // il Mac lo dice: nulla è stato scritto, SALVA torna attivo
+    salvato = false; stato("NON SALVATO", "errore"); aggiornaBottoni(); return;
+  }
+  salvato = true;
+  stato("SALVATAGGIO NEGLI APPUNTI…");
+  attendiSalvataggio(titolo, noti || new Set());
+}
+async function attendiSalvataggio(titolo, noti) {
+  const mio = ++salvaGiro;
+  for (const attesa of [1500, 3000, 5000, 8000, 12000, 15000, 18000]) {
+    await pausa(attesa);
+    if (mio !== salvaGiro) return;
+    try {
+      const j = await chiamata(URL_DATI + "?scheda=appunti");
+      if (mio !== salvaGiro) return;
+      const el = j && j.dati && Array.isArray(j.dati.elenchi) ? j.dati.elenchi : [];
+      if (el.some(e => e && !noti.has(e.slug) && String(e.titolo || "").trim() === titolo)) { stato("SALVATO NEGLI APPUNTI", "fatto"); return; }
+    } catch (e) {}
+  }
+  // Niente conferma: SALVA resta spento (un secondo invio farebbe un doppione), lo dice e basta.
+  if (mio === salvaGiro) stato("NON ANCORA NEGLI APPUNTI", "avv");
+}
+// SALVA su un elenco già mostrato: si manda l'elenco così com'è (niente modello) e lo schermo non cambia.
+async function salvaMostrato() {
+  if (occupato || salvato || !mostrata || !mostrata.punti.length) return;
+  occupato = true; salvato = true;
+  const mio = ++giro; salvaGiro++;
+  const titolo = titoloDi(ultimaDomanda);
+  const sotto = mostrata;
+  $("app").classList.add("pensa"); aggiornaBottoni();
+  stato("SALVO L'ELENCO MOSTRATO…");
+  let inviato = false;
+  try {
+    if (!K) throw new Error("chiave assente · riaprire l'indirizzo completo");
+    const noti = await slugAppunti();
+    if (mio !== giro) return;
+    const parametri = { salva: true, titolo, punti: sotto.punti.slice(), web: sotto.web === true };
+    if (sotto.fonte) parametri.fonte = sotto.fonte;
+    const { id } = await chiamata(URL_DATI + "?domanda", { method: "POST",
+      body: JSON.stringify({ testo: ultimaDomanda, tipo: "elenco", parametri: entro(parametri) }) });
+    inviato = true;
+    const inizio = Date.now();
+    let attesaDa = Date.now(), preso = false, guastoDa = 0;
+    while (Date.now() - inizio < ATTESA_MAX) {
+      await pausa(800);
+      if (mio !== giro) return;
+      let r;
+      try { r = await chiamata(URL_DATI + "?risposta=" + id); guastoDa = 0; }
+      catch (e) {
+        if (!e.ripeti) throw e;
+        if (!guastoDa) guastoDa = Date.now();
+        if (Date.now() - guastoDa > ATTESA_MAC) throw e;
+        continue;
+      }
+      if (mio !== giro) return;
+      if (r.stato === "attesa") {
+        if (preso) attesaDa = Date.now();
+        if (Date.now() - attesaDa > ATTESA_MAC) { stato("IL MAC NON RISPONDE · RESTA IN CODA", "avv"); return; }
+      } else if (r.stato === "pronta") {
+        esitoSalvataggio(analizza(r.risposta, true), titolo, noti);
+        return;
+      } else preso = true;
+    }
+    stato("NON ANCORA NEGLI APPUNTI", "avv");
+  } catch (e) {
+    if (mio !== giro) return;
+    if (!inviato && e.message !== "il collegamento non risponde") salvato = false;
+    stato(MAIUSC(e.message) + (salvato ? "" : " · NON SALVATO"), "errore");
+  } finally {
+    if (mio === giro) {
+      occupato = false;
+      $("app").classList.remove("pensa");
+      aggiornaBottoni();
+      if (vista === "risposta" && document.activeElement && document.activeElement.classList.contains("spento")) $("b-chiedi").focus();
+    }
+  }
+}
+
+// La voce arriva qualche secondo dopo il testo: si controlla ancora per 25 secondi, senza bloccare la pagina.
+async function aspettaVoce(id, pronta, mio) {
+  const fine = Date.now() + 25000;
+  while (!pronta && Date.now() < fine) {
+    await pausa(1000);
+    if (mio !== giro) return;
+    try { pronta = (await chiamata(URL_DATI + "?risposta=" + id)).audio === true; } catch (e) { if (!e.ripeti) return; }
+  }
+  if (mio !== giro) return;
+  if (!salvato) stato("RISPOSTA RICEVUTA");
+  if (!pronta) return;
+  try {
+    const voce = await chiamata(URL_DATI + "?audio=risposta-" + id, {}, "blob");
+    if (mio !== giro) return;
+    ultimaVoce = new Audio(URL.createObjectURL(voce));
+    await ultimaVoce.play();
+  } catch (e) {
+    // Senza un gesto recente gli occhiali possono bloccare l'audio: resta il pulsante per ascoltarla.
+    if (ultimaVoce && mio === giro) $("b-voce").hidden = false;
+  }
+}
+
+// ---------- Dettatura (stesse regole di Parla, verificate sugli occhiali) ----------
+// Il testo arriva con «change», «input», a volte senza eventi: si ascoltano tutti, si rilegge il campo due volte al secondo,
+// si mostra cosa è arrivato e si invia dopo un secondo di silenzio; c'è anche INVIA. La pagina non sposta né toglie mai
+// il fuoco dal campo e non simula clic: il compositore si apre solo con il gesto del Signore.
+let ultimoInviato = "", attesaInput = null, ultimoVisto = "";
+const testoCampo = () => $("domanda").value.trim();
+function invia() {
+  const t = testoCampo();
+  if (!t) { $("ricevuto").className = "vuoto"; $("ricevuto").textContent = "CAMPO VUOTO · SCORRA SUL CAMPO, PIZZICHI E DETTI"; return; }
+  if (occupato || t === ultimoInviato || vista !== "chiedi") return;
+  clearTimeout(attesaInput);
+  ultimoInviato = t;
+  $("domanda").value = ""; ultimoVisto = "";
+  $("ricevuto").textContent = "";
+  chiedi(t);
+}
+function testoArrivato() {
+  const t = testoCampo();
+  if (t === ultimoVisto) return;
+  ultimoVisto = t;
+  $("ricevuto").className = "";
+  $("ricevuto").textContent = t ? "RICEVUTO: " + t : "";
+  clearTimeout(attesaInput);
+  if (t && vista === "chiedi") attesaInput = setTimeout(invia, 1000);
+}
+const campo = $("domanda");
+for (const ev of ["input", "change", "compositionend", "blur", "keyup"]) campo.addEventListener(ev, testoArrivato);
+campo.addEventListener("keydown", e => { if (e.key === "Enter" && campo.value.trim()) { e.preventDefault(); invia(); } });
+setInterval(() => { if (vista === "chiedi" && testoCampo() !== ultimoVisto) testoArrivato(); }, 500);
+$("invia").addEventListener("click", invia);
+
+// ---------- Pulsanti della risposta ----------
+// ELENCO trasforma la risposta mostrata; SALVA salva l'elenco mostrato (o, su una risposta in prosa, la trasforma e la salva).
+const daMostrata = () => ({ daTesto: mostrata.testo, web: mostrata.web, fonte: mostrata.fonte });
+$("b-elenco").addEventListener("click", () => {
+  if (ultimaDomanda && !occupato && mostrata && mostrata.testo) chiedi(ultimaDomanda, { elenco: true, ...daMostrata() });
+});
+$("b-salva").addEventListener("click", () => {
+  if (!ultimaDomanda || occupato || salvato || !mostrata) return;
+  if (mostrata.punti.length) salvaMostrato();
+  else if (mostrata.testo) chiedi(ultimaDomanda, { elenco: true, salva: true, ...daMostrata() });
+});
+$("b-chiedi").addEventListener("click", () => { if (occupato && Date.now() - inviataAlle < 1500) return; giro++; occupato = false; $("app").classList.remove("pensa"); aggiornaBottoni(); mostra("chiedi"); });
+$("b-voce").addEventListener("click", () => { if (ultimaVoce) { ultimaVoce.currentTime = 0; ultimaVoce.play().catch(() => {}); } });
+
+// ---------- Neural Band: ▲▼ un passo per gesto, ◀▶ tra i pulsanti, indietro = stato precedente ----------
+function indietro() {
+  if (vista === "risposta") { giro++; occupato = false; $("app").classList.remove("pensa"); aggiornaBottoni(); mostra("chiedi"); }
+  else if (vista === "chiedi") { mostra("raccolte"); intestazione(); seleziona(selRiga, true); }
+  else history.back();
+}
+document.addEventListener("keydown", e => {
+  if (e.target === campo) return;   // nel campo comandano la dettatura e il sistema
+  const su = e.key === "ArrowUp", giu = e.key === "ArrowDown";
+  if (e.key === "Escape" || e.key === "Backspace") { e.preventDefault(); indietro(); return; }
+  if (vista === "raccolte" && (su || giu)) { e.preventDefault(); seleziona(selRiga + (giu ? 1 : -1), true); }
+  else if (vista === "risposta") {
+    if (su || giu) {
+      e.preventDefault();
+      if (!$("punti").hidden && $("punti").children.length) selezionaPunto(selPunto + (giu ? 1 : -1));
+      else $("corpo").scrollBy({ top: giu ? 110 : -110 });
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      const b = [...document.querySelectorAll("#v-risposta .btn")].filter(x => !x.hidden);
+      const i = b.indexOf(document.activeElement);
+      e.preventDefault();
+      b[Math.max(0, Math.min(b.length - 1, i < 0 ? 0 : i + (e.key === "ArrowRight" ? 1 : -1)))].focus();
+    }
+  }
+});
+
+// ---------- WebMCP: «Hey Meta, chiedi alla biblioteca …» con l'app aperta ----------
+(function registraStrumenti() {
+  const mc = document.modelContext;
+  if (!mc || typeof mc.registerTool !== "function") return;
+  try {
+    mc.registerTool({
+      name: "chiedi_alla_biblioteca",
+      description: "Fa una domanda ai libri di Raffaele (la sua biblioteca personale) e restituisce la risposta con la fonte; se i libri non bastano risponde dal web con l'etichetta WEB. Use when the user says 'chiedi alla biblioteca', 'cosa dice il libro', or asks about a topic he is studying.",
+      inputSchema: { type: "object", properties: {
+        domanda: { type: "string", description: "la domanda, in italiano" },
+        raccolta: { type: "string", description: "nome della raccolta di libri (facoltativo; senza = tutte)" },
+      }, required: ["domanda"] },
+      execute: async (input) => {
+        const nome = input && typeof input.raccolta === "string" ? input.raccolta.trim().toLowerCase() : "";
+        const trovata = nome ? raccolte.find(r => String(r.nome).toLowerCase() === nome) : null;
+        if (trovata) { raccolta = trovata; intestazione(); }
+        // Raccolta sconosciuta: si chiede a tutte, senza cambiare la raccolta scelta sugli occhiali
+        const opz = nome && !trovata ? { raccolta: null } : {};
+        return (await chiedi(input && input.domanda, opz)) || "La biblioteca non ha risposto in tempo.";
+      },
+    });
+  } catch (e) {}
+})();
+
+disegnaRaccolte();
+intestazione();
+caricaRaccolte();
+JarvisSaluto({ app: "biblioteca", chiave: K, url: URL_DATI, sotto: "BIBLIOTECA · FONTI CITATE", frasi: [
+  { audio: "biblioteca-1", scritta: "Biblioteca aperta, Signore. I libri li ha comprati lei. Leggerli, a quanto pare, tocca a me." },
+  { audio: "biblioteca-2", scritta: "Scaffali in linea, Signore. Silenzio in sala, prego. Vale anche per le notifiche." },
+  { audio: "biblioteca-3", scritta: "Mi chieda pure, Signore. Cito sempre la fonte. È una questione di educazione." },
+] });
+</script>
+</body>
+</html>
